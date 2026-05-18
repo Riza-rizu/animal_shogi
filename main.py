@@ -31,7 +31,7 @@ def main():
     board.setup()
     
     # 1を「人間」、2を「ランダムAI」に設定（両方HumanPlayerにすれば対戦可能）
-    player1 = HumanPlayer(PLAYER_1)
+    player1 = RandomPlayer(PLAYER_1)
     player2 = RandomPlayer(PLAYER_2)
     
     current_player_id = PLAYER_1
