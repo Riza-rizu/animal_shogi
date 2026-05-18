@@ -1,80 +1,76 @@
 """
-どうぶつしょうぎ メインエントリーポイント
-
-使い方:
-    python main.py              # 人間 vs 人間
-    python main.py --p1 human --p2 random      # 人間 vs ランダムAI
-    python main.py --p1 minimax --p2 random     # ミニマックスAI vs ランダムAI
+どうぶつしょうぎ メイン実行ファイル
 """
 
-import argparse
-import sys
-import os
+from board import Board  # 最初に作成した盤面クラスを board.py として保存してください
+from engine import GameEngine
+from player import HumanPlayer, RandomPlayer
+from constants import PLAYER_1, PLAYER_2, PIECE_DISPLAY, COLS, ROWS
 
-# animal_shogi ディレクトリをパスに追加
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-from constants import PLAYER_1, PLAYER_2
-from engine import Engine
-from player import HumanPlayer, RandomAIPlayer, MinimaxAIPlayer
-from ui.console import display_board, display_result
-
-
-def create_player(player_type: str, player_id: int):
-    """プレイヤーの種類に応じてインスタンスを生成する"""
-    if player_type == "human":
-        return HumanPlayer(player_id)
-    elif player_type == "random":
-        return RandomAIPlayer(player_id)
-    elif player_type == "minimax":
-        return MinimaxAIPlayer(player_id, depth=3)
-    else:
-        print(f"不明なプレイヤー種類: {player_type}")
-        sys.exit(1)
-
+def print_board(board):
+    """盤面をコンソール上に綺麗にテキスト描画する関数"""
+    print("\n--- 盤面 ---")
+    print("  0   1   2  (col)")
+    for r in range(ROWS):
+        row_str = f"{r} "
+        for c in range(COLS):
+            piece = board.get(c, r)
+            if piece:
+                row_str += f"[{PIECE_DISPLAY[piece]}]"
+            else:
+                row_str += "[    ]"
+        print(row_str)
+    
+    print(f"先手(1)持ち駒: {board.hands[PLAYER_1]}")
+    print(f"後手(2)持ち駒: {board.hands[PLAYER_2]}")
+    print("------------")
 
 def main():
-    parser = argparse.ArgumentParser(description="どうぶつしょうぎ")
-    parser.add_argument("--p1", type=str, default="human",
-                        choices=["human", "random", "minimax"],
-                        help="先手のプレイヤー種類")
-    parser.add_argument("--p2", type=str, default="human",
-                        choices=["human", "random", "minimax"],
-                        help="後手のプレイヤー種類")
-    args = parser.parse_args()
+    # 盤面とプレイヤーの初期化
+    board = Board()
+    board.setup()
+    
+    # 1を「人間」、2を「ランダムAI」に設定（両方HumanPlayerにすれば対戦可能）
+    player1 = HumanPlayer(PLAYER_1)
+    player2 = RandomPlayer(PLAYER_2)
+    
+    current_player_id = PLAYER_1
+    players = {PLAYER_1: player1, PLAYER_2: player2}
 
-    engine = Engine()
-    players = {
-        PLAYER_1: create_player(args.p1, PLAYER_1),
-        PLAYER_2: create_player(args.p2, PLAYER_2),
-    }
-
-    print("=== どうぶつしょうぎ 開始 ===")
-    print(f"先手: {args.p1}  /  後手: {args.p2}\n")
-
-    while not engine.is_game_over():
-        display_board(engine)
-
-        current = engine.current_player
-        legal_moves = engine.get_legal_moves()
-
+    print("どうぶつしょうぎ を開始します！")
+    
+    # ゲームループ
+    while True:
+        print_board(board)
+        
+        # 1. 現在のプレイヤーの合法手を取得
+        legal_moves = GameEngine.get_legal_moves(board, current_player_id)
+        
         if not legal_moves:
-            # 合法手がない場合（通常はどうぶつしょうぎでは起きにくい）
-            print("合法手がありません。パスします。")
-            engine.switch_turn()
-            continue
-
-        player = players[current]
-        move = player.select_move(engine, legal_moves)
-
-        turn_name = "先手" if current == PLAYER_1 else "後手"
-        print(f"\n{turn_name} の手: {move}")
-
-        engine.make_move(move)
-
-    display_board(engine)
-    display_result(engine)
-
+            # 動かせる手がなければ詰み（相手の勝ち）
+            winner = PLAYER_2 if current_player_id == PLAYER_1 else PLAYER_1
+            print(f"プレイヤー {current_player_id} に打てる手がありません。")
+            print(f"👑 プレイヤー {winner} の勝ちです！")
+            break
+            
+        # 2. プレイヤーに手を選択させる
+        current_player = players[current_player_id]
+        selected_move = current_player.choose_move(board, legal_moves)
+        print(f"\n選択された手: {selected_move}")
+        
+        # 3. 盤面を動かす（内部で remove して set する処理が走る）
+        GameEngine.make_move(board, selected_move, current_player_id)
+        
+        # 4. 勝敗判定
+        winner = GameEngine.check_winner(board)
+        if winner:
+            print_board(board)
+            print(f"👑 プレイヤー {winner} の勝ちです！ゲーム終了。")
+            break
+            
+        # 5. ターン交代
+        current_player_id = PLAYER_2 if current_player_id == PLAYER_1 else PLAYER_1
 
 if __name__ == "__main__":
     main()
+

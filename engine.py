@@ -1,186 +1,101 @@
 """
-どうぶつしょうぎ ゲームエンジン
+どうぶつしょうぎ ゲームエンジンクラス
 """
 
 from constants import (
     COLS, ROWS, PLAYER_1, PLAYER_2,
-    P1_LION, P2_LION, P1_PIECES, P2_PIECES,
-    MOVE_VECTORS, PROMOTE_MAP, CAN_PROMOTE, get_owner,
-    RESULT_NONE, RESULT_PLAYER1, RESULT_PLAYER2, RESULT_DRAW,
+    P1_LION, P2_LION, P1_CHICK, P2_CHICK,
+    MOVE_VECTORS, CAN_PROMOTE, PROMOTE_MAP, get_owner
 )
-from board import Board
-
 
 class Move:
-    """一手を表すデータクラス"""
+    def __init__(self, from_pos, to_pos, piece, is_drop=False):
+        self.from_pos = from_pos  # (col, row) または 打つ場合は None
+        self.to_pos = to_pos      # (col, row)
+        self.piece = piece        # 動かす/打つ駒
+        self.is_drop = is_drop    # 持ち駒を打つ着手なら True
 
-    def __init__(self, from_pos, to_pos, piece, promote=False, drop=False):
-        self.from_pos = from_pos   # (col, row) or None
-        self.to_pos = to_pos       # (col, row)
-        self.piece = piece         # 駒文字 ('l', 'G', etc.)
-        self.promote = promote
-        self.drop = drop
-
-    def __repr__(self):
-        if self.drop:
-            return f"Drop({self.piece} -> {self.to_pos})"
-        promo = "+" if self.promote else ""
-        return f"Move({self.piece}{promo}: {self.from_pos} -> {self.to_pos})"
-
-    def __eq__(self, other):
-        if not isinstance(other, Move):
-            return False
-        return (self.from_pos == other.from_pos and
-                self.to_pos == other.to_pos and
-                self.piece == other.piece and
-                self.promote == other.promote and
-                self.drop == other.drop)
-
-    def __hash__(self):
-        return hash((self.from_pos, self.to_pos, self.piece,
-                      self.promote, self.drop))
+    def __str__(self):
+        if self.is_drop:
+            return f"打 {self.piece} -> ({self.to_pos[0]},{self.to_pos[1]})"
+        return f"動 {self.piece}: ({self.from_pos[0]},{self.from_pos[1]}) -> ({self.to_pos[0]},{self.to_pos[1]})"
 
 
-class Engine:
-    """ゲーム進行管理クラス"""
-
-    def __init__(self):
-        self.board = Board()
-        self.board.setup()
-        self.current_player = PLAYER_1
-        self.result = RESULT_NONE
-        self.move_history = []
-        self.position_history = {}
-        self._record_position()
-
-    def opponent(self, player=None):
-        if player is None:
-            player = self.current_player
-        return PLAYER_2 if player == PLAYER_1 else PLAYER_1
-
-    def switch_turn(self):
-        self.current_player = self.opponent()
-
-    # ---- 合法手生成 ----
-
-    def get_legal_moves(self, player=None):
-        if player is None:
-            player = self.current_player
-        my_pieces = P1_PIECES if player == PLAYER_1 else P2_PIECES
+class GameEngine:
+    @staticmethod
+    def get_legal_moves(board, player):
+        """現在のプレイヤーのすべての合法手をリストで返す"""
         moves = []
 
-        # (A) 盤上の駒を動かす
+        # --- 1. 盤上の駒を動かす手 ---
         for r in range(ROWS):
             for c in range(COLS):
-                piece = self.board.get(c, r)
-                if piece is None or piece not in my_pieces:
-                    continue
-                for dc, dr in MOVE_VECTORS[piece]:
-                    nc, nr = c + dc, r + dr
-                    if not self.board.in_bounds(nc, nr):
-                        continue
-                    target = self.board.get(nc, nr)
-                    if target is not None and target in my_pieces:
-                        continue
-                    promote = False
-                    if piece in CAN_PROMOTE:
-                        if player == PLAYER_1 and nr == 0:
-                            promote = True
-                        elif player == PLAYER_2 and nr == ROWS - 1:
-                            promote = True
-                    moves.append(Move((c, r), (nc, nr), piece, promote=promote))
+                piece = board.get(c, r)
+                if piece and get_owner(piece) == player:
+                    # その駒の移動可能ベクトルを取得
+                    vectors = MOVE_VECTORS[piece]
+                    for dc, dr in vectors:
+                        nc, nr = c + dc, r + dr
+                        if board.in_bounds(nc, nr):
+                            target = board.get(nc, nr)
+                            # 移動先が空、または敵の駒なら進める
+                            if target is None or get_owner(target) != player:
+                                moves.append(Move((c, r), (nc, nr), piece, is_drop=False))
 
-        # (B) 持ち駒を打つ
-        for kind in self.board.get_hand_types(player):
+        # --- 2. 持ち駒を打つ手 ---
+        hand_pieces = board.get_hand_types(player)
+        for piece in hand_pieces:
             for r in range(ROWS):
                 for c in range(COLS):
-                    if self.board.get(c, r) is None:
-                        moves.append(Move(None, (c, r), kind, drop=True))
+                    if board.get(c, r) is None:  # 空いているマスなら打てる
+                        moves.append(Move(None, (c, r), piece, is_drop=True))
+
         return moves
 
-    # ---- 手の実行 ----
+    @staticmethod
+    def make_move(board, move, player):
+        """1手進める（状態変化を盤面に適用する）"""
+        captured_piece = None
 
-    def make_move(self, move):
-        player = self.current_player
-
-        if move.drop:
-            tc, tr = move.to_pos
-            self.board.remove_from_hand(player, move.piece)
-            self.board.set(tc, tr, move.piece)
+        if move.is_drop:
+            # 持ち駒から打つ
+            board.remove_from_hand(player, move.piece)
+            board.set(move.to_pos[0], move.to_pos[1], move.piece)
         else:
-            fc, fr = move.from_pos
-            tc, tr = move.to_pos
-            piece = self.board.remove(fc, fr)
-            captured = self.board.get(tc, tr)
-            if captured:
-                self.board.remove(tc, tr)
-                self.board.add_to_hand(player, captured)
-            if move.promote:
-                piece = PROMOTE_MAP[piece]
-            self.board.set(tc, tr, piece)
+            # 盤上の移動
+            # 移動先に敵がいれば取る
+            target = board.get(move.to_pos[0], move.to_pos[1])
+            if target is not None:
+                captured_piece = board.remove(move.to_pos[0], move.to_pos[1])
+                board.add_to_hand(player, captured_piece)
 
-        self.move_history.append(move)
-        self.result = self._check_result()
+            # 自分の駒を元の位置から外し、新しい位置へセット
+            piece = board.remove(move.from_pos[0], move.from_pos[1])
 
-        if self.result == RESULT_NONE:
-            self.switch_turn()
-            self._record_position()
-            if self._is_repetition():
-                self.result = RESULT_DRAW
-        return self.result
+            # ひよこの成り判定
+            if piece in CAN_PROMOTE:
+                # 先手なら最奥（row=0）、後手なら最奥（row=3）に入ったら成る
+                if (player == PLAYER_1 and move.to_pos[1] == 0) or (player == PLAYER_2 and move.to_pos[1] == ROWS - 1):
+                    piece = PROMOTE_MAP[piece]
 
-    # ---- 勝利判定 ----
+            board.set(move.to_pos[0], move.to_pos[1], piece)
 
-    def _check_result(self):
-        player = self.current_player
-        opp = self.opponent(player)
+        return captured_piece
 
-        # ライオンキャッチ
-        if self.board.find_lion(opp) is None:
-            return RESULT_PLAYER1 if player == PLAYER_1 else RESULT_PLAYER2
+    @staticmethod
+    def check_winner(board):
+        """勝敗を判定する。ゲーム継続なら None"""
+        # 盤上のライオンを捜索
+        p1_lion = board.find_lion(PLAYER_1)
+        p2_lion = board.find_lion(PLAYER_2)
 
-        # トライルール
-        lion_pos = self.board.find_lion(player)
-        if lion_pos:
-            _, lr = lion_pos
-            target_row = 0 if player == PLAYER_1 else ROWS - 1
-            if lr == target_row:
-                if not self._is_lion_capturable(lion_pos, opp):
-                    return RESULT_PLAYER1 if player == PLAYER_1 else RESULT_PLAYER2
+        if not p1_lion: return PLAYER_2  # 先手ライオンが取られた
+        if not p2_lion: return PLAYER_1  # 後手ライオンが取られた
 
-        return RESULT_NONE
+        # トライルールの簡易判定
+        # ※本来は「次の手に取られないこと」が必要
+        if p1_lion[1] == 0: return PLAYER_1
+        if p2_lion[1] == ROWS - 1: return PLAYER_2
 
-    def _is_lion_capturable(self, lion_pos, attacker):
-        lc, lr = lion_pos
-        atk_pieces = P1_PIECES if attacker == PLAYER_1 else P2_PIECES
-        for r in range(ROWS):
-            for c in range(COLS):
-                piece = self.board.get(c, r)
-                if piece is None or piece not in atk_pieces:
-                    continue
-                for dc, dr in MOVE_VECTORS[piece]:
-                    if (c + dc, r + dr) == (lc, lr):
-                        return True
-        return False
+        return None
 
-    # ---- 千日手 ----
-
-    def _record_position(self):
-        key = (self.board.to_hashable(), self.current_player)
-        self.position_history[key] = self.position_history.get(key, 0) + 1
-
-    def _is_repetition(self):
-        key = (self.board.to_hashable(), self.current_player)
-        return self.position_history.get(key, 0) >= 3
-
-    def is_game_over(self):
-        return self.result != RESULT_NONE
-
-    def get_result_text(self):
-        if self.result == RESULT_PLAYER1:
-            return "先手（PLAYER_1）の勝ち！"
-        elif self.result == RESULT_PLAYER2:
-            return "後手（PLAYER_2）の勝ち！"
-        elif self.result == RESULT_DRAW:
-            return "引き分け（千日手）"
-        return "対局中"
