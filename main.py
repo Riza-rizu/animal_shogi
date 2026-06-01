@@ -8,7 +8,7 @@ from player import HumanPlayer, RandomPlayer
 from constants import PLAYER_1, PLAYER_2, PIECE_DISPLAY, COLS, ROWS
 
 def print_board(board):
-    """盤面をコンソール上に綺麗にテキスト描画する関数"""
+    """盤面をテキスト描画する関数"""
     print("\n--- 盤面 ---")
     print("  0   1   2  (col)")
     for r in range(ROWS):
@@ -30,7 +30,6 @@ def main():
     board = Board()
     board.setup()
     
-    # 1を「人間」、2を「ランダムAI」に設定（両方HumanPlayerにすれば対戦可能）
     player1 = RandomPlayer(PLAYER_1)
     player2 = RandomPlayer(PLAYER_2)
     
