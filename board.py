@@ -148,3 +148,11 @@ class Board:
         turn = np.array([1.0 if current_player == PLAYER_2 else 0.0],
                         dtype=np.float32)                # 1
         return np.concatenate([board_flat, hands_vec, turn])
+
+
+def state2vec(board, current_player_id):
+    """
+    状態（Boardオブジェクトと手番ID）を受け取り、139次元のone-hot vectorを返す。
+    """
+    return board.to_state_vector(current_player_id)
+
