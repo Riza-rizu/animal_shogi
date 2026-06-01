@@ -30,7 +30,6 @@ def print_board(board):
     print("------------")
 
 def run_simulation(yaml_path):
-    # YAMLの読み込み
     with open(yaml_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
     
@@ -45,7 +44,7 @@ def run_simulation(yaml_path):
     # 出力ファイル名
     output_filename = f"output{seed:03d}.pkl"
     
-    # 既存データのロード（上書き更新しながら履歴を蓄積するため）
+    # 既存データのロード
     data_dict = {}
     if os.path.exists(output_filename):
         try:
@@ -71,7 +70,7 @@ def run_simulation(yaml_path):
         # 1試合の履歴を記録するリスト: (state_vector, player_id)
         history = []
         
-        # 千日手（無限ループ）対策として最大200手とする
+        # 千日手
         max_moves = 200
         winner = None
         
