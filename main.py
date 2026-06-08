@@ -6,6 +6,7 @@ import sys
 import pickle
 import os
 import yaml
+import numpy as np
 from board import Board, state2vec
 from engine import GameEngine
 from player import HumanPlayer, RandomPlayer
