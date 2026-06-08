@@ -6,6 +6,7 @@ import sys
 import pickle
 import os
 import yaml
+import numpy as np
 from board import Board, state2vec
 from engine import GameEngine
 from player import HumanPlayer, RandomPlayer
@@ -114,11 +115,9 @@ def run_simulation(yaml_path):
                 data_dict[state_key] = []
             data_dict[state_key].append(val)
             
-        # 1試合ごとにpklファイルを保存（上書き）
-        with open(output_filename, 'wb') as f:
-            pickle.dump(data_dict, f)
-            
         if (g + 1) % 100 == 0 or (g + 1) == games:
+            with open(output_filename, 'wb') as f:
+                pickle.dump(data_dict, f)
             print(f"進捗: {g + 1} / {games} 試合完了 (現在のユニーク状態数: {len(data_dict)})")
             
     print("シミュレーションが完了しました。")
