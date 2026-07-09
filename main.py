@@ -121,12 +121,15 @@ def run_simulation(yaml_path):
                 data_dict[state_key] = []
             data_dict[state_key].append(val)
             
-        if (g + 1) % 100 == 0 or (g + 1) == games:
-            with open(output_filename, 'wb') as f:
-                pickle.dump(data_dict, f)
+        # 1000試合ごとに進捗状況をコンソールに表示（ファイル保存はしない）
+        if (g + 1) % 1000 == 0 or (g + 1) == games:
             print(f"進捗: {g + 1} / {games} 試合完了 (現在のユニーク状態数: {len(data_dict)})")
             
-    print("シミュレーションが完了しました。")
+    # ループ完了後に、最後にまとめて1回だけファイルに保存する
+    print(f"データをファイルに書き込んでいます: {output_filename} ...")
+    with open(output_filename, 'wb') as f:
+        pickle.dump(data_dict, f)
+    print("シミュレーションおよびファイルの保存が完了しました。")
 
 
 def main():
