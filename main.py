@@ -36,6 +36,7 @@ def run_simulation(yaml_path):
     
     seed = config.get('seed', 0)
     games = config.get('games', 1000)
+    alpha = config.get('alpha', 0.90)  # 割引率（デフォルト値: 0.90）
     
     # 乱数シードの設定
     import random
@@ -55,7 +56,7 @@ def run_simulation(yaml_path):
         except Exception as e:
             print(f"警告: 既存の {output_filename} の読み込みに失敗しました。新規作成します。エラー: {e}")
             
-    print(f"シード値: {seed}, 試合数: {games} でシミュレーションを開始します。")
+    print(f"シード値: {seed}, 試合数: {games}, 割引率(alpha): {alpha} でシミュレーションを開始します。")
     print(f"出力ファイル: {output_filename}")
     
     for g in range(games):
@@ -99,17 +100,22 @@ def run_simulation(yaml_path):
             # 200手を超えたら引き分け
             winner = RESULT_DRAW
             
-        # 評価値の計算とデータ蓄積
-        # 勝者手番: +1.0, 敗者手番: -1.0, 引き分け: 0.0
-        for state_vec, player_id in history:
+        # 評価値の計算とデータ蓄積（割引率 alpha を適用）
+        # 終局に近い手ほど勝敗への影響が大きく、初期に近い手ほど小さくなるように割引く
+        num_moves = len(history)
+        for i, (state_vec, player_id) in enumerate(history):
             state_key = tuple(state_vec.tolist())
+            
+            # 終局（最後の局面）からの残り手数（距離）
+            steps_from_end = num_moves - 1 - i
+            discount = alpha ** steps_from_end
             
             if winner == RESULT_DRAW:
                 val = 0.0
             elif winner == player_id:
-                val = 1.0
+                val = 1.0 * discount
             else:
-                val = -1.0
+                val = -1.0 * discount
                 
             if state_key not in data_dict:
                 data_dict[state_key] = []

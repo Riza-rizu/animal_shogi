@@ -24,11 +24,11 @@ def get_data():
     return X_train, y_train, X_test, y_test
 
 def create_model():
-    # 入力層 139次元、出力層 1次元の回帰モデル
+    # 入力層 139次元、出力層 1次元の回帰モデル (パターンA: 512 -> 256 -> 1)
     model = keras.Sequential([
         keras.layers.Input(shape=(139,)),
-        keras.layers.Dense(128, activation="relu"),
-        keras.layers.Dense(64, activation="relu"),
+        keras.layers.Dense(512, activation="relu"),
+        keras.layers.Dense(256, activation="relu"),
         # 出力値を評価値の範囲（-1.0〜1.0）にするため tanh を使用
         keras.layers.Dense(1, activation="tanh")
     ])
