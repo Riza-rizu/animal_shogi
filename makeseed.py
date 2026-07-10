@@ -7,5 +7,5 @@ for i in range(n_files):
 
 with open("tasks.sh", "w") as f:
     for i in range(n_files):
-        f.write(f"python main.py input{i:03d}.yaml\n")
+        f.write(f".venv/bin/python main.py input{i:03d}.yaml\n")
 
