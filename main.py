@@ -36,7 +36,7 @@ def run_simulation(yaml_path):
     
     seed = config.get('seed', 0)
     games = config.get('games', 1000)
-    alpha = config.get('alpha', 0.90)  # 割引率（デフォルト値: 0.90）
+    alpha = config.get('alpha', 0.95)  # 割引率（デフォルト値: 0.90）
     
     # 乱数シードの設定
     import random
