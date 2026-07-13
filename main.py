@@ -9,7 +9,7 @@ import yaml
 import numpy as np
 from board import Board, state2vec
 from engine import GameEngine
-from player import HumanPlayer, RandomPlayer, ModelPlayer
+from player import HumanPlayer, RandomPlayer, ModelPlayer, load_keras_model_safe
 from constants import PLAYER_1, PLAYER_2, PIECE_DISPLAY, COLS, ROWS, RESULT_DRAW
 
 def print_board(board):
@@ -56,7 +56,7 @@ def run_simulation(yaml_path):
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
         if os.path.exists(model_path):
             print(f"シミュレーション用にモデル {model_path} をロードしています...")
-            model = tf.keras.models.load_model(model_path)
+            model = load_keras_model_safe(model_path)
         else:
             print(f"エラー: 指定されたモデルファイルが見つかりません: {model_path}")
             sys.exit(1)
@@ -204,7 +204,7 @@ def main():
     if args.p1 == 'ai':
         if os.path.exists(m1_path):
             print(f"先手(1)用にモデル {m1_path} をロードしています...")
-            model1 = tf.keras.models.load_model(m1_path)
+            model1 = load_keras_model_safe(m1_path)
         else:
             print(f"エラー: 指定されたモデルファイルが見つかりません: {m1_path}")
             sys.exit(1)
@@ -213,7 +213,7 @@ def main():
     if args.p2 == 'ai':
         if os.path.exists(m2_path):
             print(f"後手(2)用にモデル {m2_path} をロードしています...")
-            model2 = tf.keras.models.load_model(m2_path)
+            model2 = load_keras_model_safe(m2_path)
         else:
             print(f"エラー: 指定されたモデルファイルが見つかりません: {m2_path}")
             sys.exit(1)

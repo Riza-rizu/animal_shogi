@@ -33,6 +33,63 @@ class RandomPlayer:
         return random.choice(legal_moves)
 
 
+def load_keras_model_safe(model_path):
+    """
+    Kerasモデルを安全にロードするヘルパー関数。
+    新しいバージョンで保存されたモデルを古いバージョンでロードする際に、
+    不要なパラメータ（quantization_config等）によるエラーが発生した場合は自動修復を試みます。
+    """
+    import tensorflow as tf
+    import os
+    import tempfile
+    import zipfile
+    import json
+    
+    try:
+        return tf.keras.models.load_model(model_path)
+    except Exception as e:
+        err_msg = str(e)
+        if "quantization_config" in err_msg or "Unrecognized keyword arguments" in err_msg:
+            print(f"警告: モデル {model_path} の互換性エラーを検出しました（quantization_config）。自動修復してロードを試みます...")
+            cleaned_path = None
+            try:
+                fd, cleaned_path = tempfile.mkstemp(suffix=".keras")
+                os.close(fd)
+                
+                with zipfile.ZipFile(model_path, 'r') as zin:
+                    with zipfile.ZipFile(cleaned_path, 'w') as zout:
+                        for item in zin.infolist():
+                            data = zin.read(item.filename)
+                            if item.filename == "config.json":
+                                config_dict = json.loads(data.decode('utf-8'))
+                                
+                                # 再帰的に quantization_config を削除
+                                def remove_keys(d):
+                                    if isinstance(d, dict):
+                                        d.pop('quantization_config', None)
+                                        for k, v in list(d.items()):
+                                            remove_keys(v)
+                                    elif isinstance(d, list):
+                                        for x in d:
+                                            remove_keys(x)
+                                            
+                                remove_keys(config_dict)
+                                data = json.dumps(config_dict).encode('utf-8')
+                            zout.writestr(item, data)
+                            
+                model = tf.keras.models.load_model(cleaned_path)
+                os.remove(cleaned_path)
+                print("モデルの自動修復ロードに成功しました。")
+                return model
+            except Exception as clean_err:
+                print(f"修復失敗: {clean_err}")
+                if cleaned_path and os.path.exists(cleaned_path):
+                    os.remove(cleaned_path)
+                raise e
+        else:
+            raise e
+
+
 class ModelPlayer:
     def __init__(self, player_id, model_path_or_model="animal_shogi_model.keras", ratio=4.0):
         """
@@ -57,7 +114,7 @@ class ModelPlayer:
         
         if isinstance(model_path_or_model, str):
             try:
-                self.model = tf.keras.models.load_model(model_path_or_model)
+                self.model = load_keras_model_safe(model_path_or_model)
                 print(f"モデル {model_path_or_model} を正常にロードしました。")
             except Exception as e:
                 print(f"エラー: モデル {model_path_or_model} のロードに失敗しました: {e}")
