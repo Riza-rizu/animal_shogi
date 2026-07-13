@@ -197,7 +197,6 @@ def main():
     
     # AIモデルの事前ロード（重複ロードを避けるため）
     import tensorflow as tf
-    import os
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     
     model1 = None
