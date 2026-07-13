@@ -20,22 +20,17 @@ def main():
     # ディレクトリ内の output*.pkl ファイルを取得
     pkl_files = glob.glob("output*.pkl")
     
-    if not pkl_files:
-        print("エラー: output*.pkl ファイルが見つかりません。")
-        print("先にシミュレーションを実行してデータを生成してください。")
-        sys.exit(1)
-
-    print(f"検出された新しいデータファイル数: {len(pkl_files)}")
-    
     # 累計データベースのロード (存在しない場合は新規作成)
     cumulative_data = {}
+    db_reconstructed = False
+    
     if os.path.exists(CUMULATIVE_FILE):
         try:
             with open(CUMULATIVE_FILE, 'rb') as f:
                 cumulative_data = pickle.load(f)
             print(f"累計データベースをロードしました。現在の登録局面数: {len(cumulative_data)}")
         except Exception as e:
-            print(f"警告: 既存の {CUMULATIVE_FILE} の読み込みに失敗しました。新規作成します。エラー: {e}")
+            print(f"警告: 既存 of {CUMULATIVE_FILE} の読み込みに失敗しました。新規作成します。エラー: {e}")
     elif os.path.exists("train_data.npy"):
         try:
             print("既存の train_data.npy から累計データベースを復元しています...")
@@ -52,11 +47,28 @@ def main():
                 
                 cumulative_data[state_vec] = (DEFAULT_OLD_COUNT, mean_val)
             print(f"既存の train_data.npy から {len(cumulative_data)} 局面を復元しました。")
+            db_reconstructed = True
         except Exception as e:
             print(f"警告: train_data.npy からの復元に失敗しました: {e}")
     else:
         print(f"新規の累計データベースを構築します。")
 
+    # 新しいデータファイルがない場合の処理
+    if not pkl_files:
+        if db_reconstructed:
+            # データベースの復元のみが行われた場合、それを保存して正常終了する
+            print(f"データベースの復元が完了したため、{CUMULATIVE_FILE} を保存します。")
+            with open(CUMULATIVE_FILE, 'wb') as f:
+                pickle.dump(cumulative_data, f)
+            print("処理を正常終了します。")
+            sys.exit(0)
+        else:
+            print("エラー: 新しい対戦ログ（output*.pkl）が見つかりません。")
+            print("また、復元元となる train_data.npy も存在しませんでした。")
+            print("先にシミュレーションを実行してデータを生成してください。")
+            sys.exit(1)
+
+    print(f"検出された新しいデータファイル数: {len(pkl_files)}")
     print("新しいデータファイルを読み込み、マージしています...")
 
     # 新しいデータファイルの内容を一時的に集計
