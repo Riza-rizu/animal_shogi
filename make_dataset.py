@@ -44,8 +44,10 @@ def main():
         state_vec = list(state_key)
         # 評価値の平均を計算（-1.0 〜 1.0）
         mean_val = np.mean(values)
+        # 符号付き平方根（p=0.5）でスケーリングして0付近を引き伸ばす
+        scaled_val = np.sign(mean_val) * (np.abs(mean_val) ** 0.5)
         # 結合して 140次元 にする
-        row = state_vec + [mean_val]
+        row = state_vec + [scaled_val]
         dataset_list.append(row)
 
     # NumPy 配列に変換 (形状: [N, 140])
