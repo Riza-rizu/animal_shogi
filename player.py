@@ -91,17 +91,17 @@ def load_keras_model_safe(model_path):
 
 
 class ModelPlayer:
-    def __init__(self, player_id, model_path_or_model="animal_shogi_model.keras", ratio=4.0):
+    def __init__(self, player_id, model_path_or_model="animal_shogi_model.keras", beta=10.0):
         """
         ニューラルネットワークモデルを使用したAIプレイヤー。
         
         Args:
             player_id: プレイヤーのID（PLAYER_1 または PLAYER_2）
             model_path_or_model: 学習済みモデルのパス（str）またはロード済みのモデルオブジェクト
-            ratio: 最善手と次善手の確率比率 R（デフォルト: 4.0 = 8:2）
+            beta: 逆温度パラメータ（デフォルト: 10.0）
         """
         self.player_id = player_id
-        self.ratio = ratio
+        self.beta = beta
         
         import os
         # TensorFlow の起動ログ出力を抑制
@@ -181,25 +181,17 @@ class ModelPlayer:
             val = evals[idx]
             print(f"  [{rank}] {move} -> 評価値: {val:.4f}")
 
-        # 4. 最善手と次善手の差から逆温度 beta を計算
+        # 4. 固定の逆温度 beta を使用
+        beta = self.beta
         best_idx = sorted_indices[0]
-        second_best_idx = sorted_indices[1]
-        e1 = evals[best_idx]
-        e2 = evals[second_best_idx]
-        diff = e1 - e2
-
-        if diff > 1e-5:
-            beta = self.np.log(self.ratio) / diff
-        else:
-            beta = 1.0  # 評価値が同じ場合は等確率に近い選択
 
         # 5. ソフトマックス関数を用いて選択確率を計算
-        shifted_evals = evals - e1  # オーバーフロー防止
+        shifted_evals = evals - evals[best_idx]  # オーバーフロー防止
         exp_vals = self.np.exp(beta * shifted_evals)
         probs = exp_vals / self.np.sum(exp_vals)
 
         # 確率一覧を表示
-        print(f"  (計算結果 - 逆温度 beta: {beta:.4f}, 比率 R: {self.ratio:.1f})")
+        print(f"  (設定値 - 逆温度 beta: {beta:.4f})")
         print("  選択確率:")
         for rank, idx in enumerate(sorted_indices):
             move = legal_moves[idx]

@@ -42,7 +42,7 @@ def run_simulation(yaml_path):
     p1_type = config.get('p1', 'random')
     p2_type = config.get('p2', 'random')
     model_path = config.get('model_path', 'animal_shogi_model.keras')
-    ratio = config.get('ratio', 4.0)
+    beta = config.get('beta', 10.0)
     
     # 乱数シードの設定
     import random
@@ -84,12 +84,12 @@ def run_simulation(yaml_path):
         
         # プレイヤーの作成
         if p1_type == 'ai':
-            player1 = ModelPlayer(PLAYER_1, model_path_or_model=model, ratio=ratio)
+            player1 = ModelPlayer(PLAYER_1, model_path_or_model=model, beta=beta)
         else:
             player1 = RandomPlayer(PLAYER_1)
             
         if p2_type == 'ai':
-            player2 = ModelPlayer(PLAYER_2, model_path_or_model=model, ratio=ratio)
+            player2 = ModelPlayer(PLAYER_2, model_path_or_model=model, beta=beta)
         else:
             player2 = RandomPlayer(PLAYER_2)
             
@@ -178,8 +178,8 @@ def main():
                         help="先手のプレイヤー種別 (human, random, ai)")
     parser.add_argument("--p2", type=str, choices=["human", "random", "ai"], default="random",
                         help="後手のプレイヤー種別 (human, random, ai)")
-    parser.add_argument("--ratio", type=float, default=4.0,
-                        help="AIプレイヤーの最善手と次善手の確率比率 R (デフォルト: 4.0 = 8:2)")
+    parser.add_argument("--beta", type=float, default=10.0,
+                        help="AIプレイヤーの逆温度 beta (デフォルト: 10.0)")
     parser.add_argument("--model", type=str, default="animal_shogi_model.keras",
                         help="使用するモデルのパス (デフォルト: animal_shogi_model.keras)")
     parser.add_argument("--model1", type=str, default=None,
@@ -225,14 +225,14 @@ def main():
     elif args.p1 == 'random':
         player1 = RandomPlayer(PLAYER_1)
     elif args.p1 == 'ai':
-        player1 = ModelPlayer(PLAYER_1, model_path_or_model=model1, ratio=args.ratio)
+        player1 = ModelPlayer(PLAYER_1, model_path_or_model=model1, beta=args.beta)
         
     if args.p2 == 'human':
         player2 = HumanPlayer(PLAYER_2)
     elif args.p2 == 'random':
         player2 = RandomPlayer(PLAYER_2)
     elif args.p2 == 'ai':
-        player2 = ModelPlayer(PLAYER_2, model_path_or_model=model2, ratio=args.ratio)
+        player2 = ModelPlayer(PLAYER_2, model_path_or_model=model2, beta=args.beta)
         
     players = {PLAYER_1: player1, PLAYER_2: player2}
 
