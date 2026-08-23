@@ -8,7 +8,7 @@ for i in range(n_files):
         f.write("p1: ai\n")
         f.write("p2: ai\n")
         f.write("model_path: animal_shogi_model.keras\n")
-        f.write("ratio: 4.0\n")
+        f.write("beta: 10.0\n")
 
 with open("tasks.sh", "w") as f:
     for i in range(n_files):
