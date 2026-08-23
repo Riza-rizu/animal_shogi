@@ -58,7 +58,8 @@ def main():
         X_train, y_train,
         epochs=epochs,
         batch_size=batch_size,
-        validation_data=(X_test, y_test)
+        validation_data=(X_test, y_test),
+        verbose=2
     )
     
     # 4. 評価
