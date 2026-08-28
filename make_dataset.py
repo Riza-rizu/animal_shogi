@@ -119,15 +119,30 @@ def main():
 
     # 学習用 train_data.npy の生成
     print("学習用 NumPy 配列を生成しています...")
-    dataset_list = []
-    for state_key, (count, mean_val) in cumulative_data.items():
+    num_items = len(cumulative_data)
+    
+    # メモリ節約のため、中間リスト（dataset_list）を作らず NumPy 配列を直接事前確保
+    dataset_array = np.empty((num_items, 140), dtype=np.float32)
+    
+    # キーをリスト化し、辞書から pop してメモリを解放しながら配列に代入していく
+    keys = list(cumulative_data.keys())
+    for idx, state_key in enumerate(keys):
+        count, mean_val = cumulative_data.pop(state_key)
         state_vec = list(state_key)
         # 符号付き平方根（p=0.5）でスケーリングして0付近を引き伸ばす
         scaled_val = np.sign(mean_val) * (np.abs(mean_val) ** 0.5)
-        row = state_vec + [scaled_val]
-        dataset_list.append(row)
+        
+        dataset_array[idx, :139] = state_vec
+        dataset_array[idx, 139] = scaled_val
+        
+        # 100万局面ごとに進捗を表示
+        if (idx + 1) % 1000000 == 0:
+            print(f"  - 配列化進行状況: {idx + 1} / {num_items} 局面完了")
+            
+    # メモリを明示的に解放
+    del keys
+    del cumulative_data
 
-    dataset_array = np.array(dataset_list, dtype=np.float32)
     output_filename = "train_data.npy"
     np.save(output_filename, dataset_array)
 
