@@ -275,8 +275,8 @@ def run_self_match(m_name, m_path, num_games=1000, beta=10.0, num_workers=6, sav
 def main():
     parser = argparse.ArgumentParser(description="どうぶつしょうぎ 万能対戦スクリプト")
     parser.add_argument("--preset", type=str, default=None,
-                        choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "all"],
-                        help="プリセット番号 (1:新Gen2 vs 新Gen1, 2:新Gen1 vs 元Gen5, 3:新Gen2 vs 元Gen6, 4:新Gen2同士, 5:新Gen3 vs 新Gen2, 6:新Gen3同士, 7:新Gen4 vs 新Gen3, 8:新Gen4同士, 9:新Gen4 vs 新Gen2, 10:新Gen4 vs 元Gen7, 11:新Gen5 vs 新Gen4, 12:新Gen5 vs 新Gen3, 13:新Gen5 vs 元Gen7, 14:新Gen5同士, 15:新Gen2 vs 旧Gen4, 16:新Gen3(0.80) vs Gen3(0.95), 17:新Gen4(0.80) vs Gen4(0.95), 18:新Gen5(0.80) vs Gen5(0.95), all:全て連続実行)")
+                        choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "all"],
+                        help="プリセット番号 (1:新Gen2 vs 新Gen1, 2:新Gen1 vs 元Gen5, 3:新Gen2 vs 元Gen6, 4:新Gen2同士, 5:新Gen3 vs 新Gen2, 6:新Gen3同士, 7:新Gen4 vs 新Gen3, 8:新Gen4同士, 9:新Gen4 vs 新Gen2, 10:新Gen4 vs 元Gen7, 11:新Gen5 vs 新Gen4, 12:新Gen5 vs 新Gen3, 13:新Gen5 vs 元Gen7, 14:新Gen5同士, 15:新Gen2 vs 旧Gen4, 16:新Gen3(0.80) vs Gen3(0.95), 17:新Gen4(0.80) vs Gen4(0.95), 18:新Gen5(0.80) vs Gen5(0.95), 19:新Gen6 vs 新Gen5, 20:新Gen6 vs 新Gen4, 21:新Gen6同士, all:全て連続実行)")
     parser.add_argument("--m1", type=str, default=None, help="モデル1パス")
     parser.add_argument("--m2", type=str, default=None, help="モデル2パス")
     parser.add_argument("--name1", type=str, default="Model1", help="モデル1名称")
@@ -294,6 +294,7 @@ def main():
     g3_path = "animal_shogi_model_gen3.keras"
     g4_path = "animal_shogi_model_gen4.keras"
     g5_new_path = "animal_shogi_model_gen5.keras"
+    g6_new_path = "animal_shogi_model_gen6.keras"
     g4_old_path = "legacy_v1/animal_shogi_model_server_gen4.keras"
     g5_path = "legacy_v1/animal_shogi_model_server_gen5.keras"
     g6_path = "legacy_v1/animal_shogi_model_server_gen6.keras"
@@ -374,6 +375,18 @@ def main():
         # 18. 新Gen5(0.80) vs Gen5(0.95) (先後各500局)
         run_versus_match("新Gen5(0.80)", g5_new_path, "Gen5(0.95)", g5_decay095_path,
                          games_per_side=500, beta=args.beta, num_workers=args.workers, save_prefix="gen5_080_vs_gen5_095")
+    elif args.preset == "19":
+        # 19. 新Gen6 vs 新Gen5 (先後各500局)
+        run_versus_match("新Gen6", g6_new_path, "新Gen5", g5_new_path,
+                         games_per_side=500, beta=args.beta, num_workers=args.workers, save_prefix="gen6_vs_gen5")
+    elif args.preset == "20":
+        # 20. 新Gen6 vs 新Gen4 (先後各500局)
+        run_versus_match("新Gen6", g6_new_path, "新Gen4", g4_path,
+                         games_per_side=500, beta=args.beta, num_workers=args.workers, save_prefix="gen6_vs_gen4")
+    elif args.preset == "21":
+        # 21. 新Gen6 同士 (1,000局)
+        run_self_match("新Gen6", g6_new_path,
+                       num_games=1000, beta=args.beta, num_workers=args.workers, save_prefix="gen6")
     elif args.preset == "all":
         print("\n" + "=" * 70)
         print(" 【全4カード連続対戦ベンチマークを開始します】")
