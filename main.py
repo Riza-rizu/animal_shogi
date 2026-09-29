@@ -317,7 +317,7 @@ def main():
                 print("【結果】 引き分け（千日手）です。")
                 
         # 複数ゲーム対戦時の進捗表示
-        if not verbose and ((g + 1) % 10 == 0 or (g + 1) == args.games):
+        if not verbose and ((g + 1) % 50 == 0 or (g + 1) == args.games):
             print(f"進捗: {g + 1} / {args.games} 局完了...")
 
     # 最終的な勝率レポート

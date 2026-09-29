@@ -1,50 +1,61 @@
 """
-どうぶつしょうぎ プレイヤークラス
+AI プレイヤーモジュール (深さ2のMin-Max探索 + CNN勝率モデル)
 """
 
-import random
+import os
+import sys
+import numpy as np
 
-class HumanPlayer:
+# プロジェクトルートのパス解決
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from constants import (
+    PLAYER_1, PLAYER_2, RESULT_PLAYER1, RESULT_PLAYER2, RESULT_DRAW
+)
+from engine import GameEngine
+from board import state2vec
+
+class BasePlayer:
     def __init__(self, player_id):
         self.player_id = player_id
 
     def choose_move(self, board, legal_moves):
-        """人間がコンソール入力で手を選ぶ"""
-        print("\n選択可能な手:")
-        for idx, m in enumerate(legal_moves):
-            print(f"[{idx}] {m}")
+        raise NotImplementedError
 
+
+class HumanPlayer(BasePlayer):
+    def choose_move(self, board, legal_moves):
+        print(f"プレイヤー {self.player_id} の手番です。")
+        for i, move in enumerate(legal_moves):
+            print(f"{i}: {move}")
         while True:
             try:
-                choice = int(input(f"プレイヤー {self.player_id} の番です。番号を入力してください: "))
+                choice = int(input("手を選択してください (番号): "))
                 if 0 <= choice < len(legal_moves):
                     return legal_moves[choice]
             except ValueError:
                 pass
-            print("無効な数値です。もう一度入力してください。")
+            print("無効な入力です。")
 
 
-class RandomPlayer:
-    def __init__(self, player_id):
-        self.player_id = player_id
-
+class RandomPlayer(BasePlayer):
     def choose_move(self, board, legal_moves):
-        """合法手の中から完全にランダムで選ぶAI"""
-        return random.choice(legal_moves)
+        if not legal_moves:
+            return None
+        return legal_moves[np.random.choice(len(legal_moves))]
 
 
 def load_keras_model_safe(model_path):
     """
-    Kerasモデルを安全にロードするヘルパー関数。
-    新しいバージョンで保存されたモデルを古いバージョンでロードする際に、
-    不要なパラメータ（quantization_config等）によるエラーが発生した場合は自動修復を試みます。
+    Keras モデルを安全にロードするヘルパー関数。
     """
     import tensorflow as tf
-    import os
-    import tempfile
     import zipfile
     import json
-    
+    import tempfile
+
     try:
         return tf.keras.models.load_model(model_path)
     except Exception as e:
@@ -63,7 +74,6 @@ def load_keras_model_safe(model_path):
                             if item.filename == "config.json":
                                 config_dict = json.loads(data.decode('utf-8'))
                                 
-                                # 再帰的に quantization_config を削除
                                 def remove_keys(d):
                                     if isinstance(d, dict):
                                         d.pop('quantization_config', None)
@@ -93,7 +103,7 @@ def load_keras_model_safe(model_path):
 class ModelPlayer:
     def __init__(self, player_id, model_path_or_model="animal_shogi_model.keras", beta=10.0):
         """
-        ニューラルネットワークモデルを使用したAIプレイヤー。
+        深さ2のMin-Max探索とニューラルネットワークモデルを併用するAIプレイヤー。
         
         Args:
             player_id: プレイヤーのID（PLAYER_1 または PLAYER_2）
@@ -103,12 +113,10 @@ class ModelPlayer:
         self.player_id = player_id
         self.beta = beta
         
-        import os
         # TensorFlow の起動ログ出力を抑制
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
         
         import tensorflow as tf
-        import numpy as np
         self.tf = tf
         self.np = np
         
@@ -123,86 +131,96 @@ class ModelPlayer:
             self.model = model_path_or_model
 
     def choose_move(self, board, legal_moves):
-        """ニューラルネットワークモデルを用いて手を選択する"""
+        """
+        深さ2のMin-Max探索により、相手の反撃を織り込んだ勝率評価値で手を選択する
+        """
         if not legal_moves:
             return None
         if len(legal_moves) == 1:
             return legal_moves[0]
 
-        # 1. 各合法手における遷移先の状態（局面）ベクトルを取得
-        next_states = []
-        immediate_win_indices = set()
+        opponent_id = 3 - self.player_id
+        evals = self.np.zeros(len(legal_moves), dtype=self.np.float32)
 
-        from engine import GameEngine
-        from board import state2vec
+        # 探索用のデータコンテナ
+        eval_determined = {}
+        move_opp_states = {}
+        all_batch_states = []
+        batch_mapping = []  # 各バッチ要素がどの候補手 (m_idx) に対応するか
 
-        for idx, move in enumerate(legal_moves):
+        for m_idx, move in enumerate(legal_moves):
             next_board = board.copy()
-            # 仮想的に手を指す
             GameEngine.make_move(next_board, move, self.player_id)
-            # 即座に勝利できるか判定
+            
+            # 1. 自分が即座に勝利できる手か？
             winner = GameEngine.check_winner(next_board)
             if winner == self.player_id:
-                immediate_win_indices.add(idx)
-                next_states.append(None)
+                evals[m_idx] = 1.0  # 即勝ち (勝率 100%)
+                eval_determined[m_idx] = 1.0
+                continue
+
+            # 2. 相手の手番を展開
+            opp_legal_moves = GameEngine.get_legal_moves(next_board, opponent_id)
+            if not opp_legal_moves:
+                evals[m_idx] = 1.0  # 相手の手がない＝自分の勝ち
+                eval_determined[m_idx] = 1.0
+                continue
+
+            # 相手の合法手の中に「相手の即勝ち（自ライオン捕獲など）」があるか？
+            has_immediate_loss = False
+            opp_next_states = []
+
+            for opp_move in opp_legal_moves:
+                opp_board = next_board.copy()
+                GameEngine.make_move(opp_board, opp_move, opponent_id)
+                opp_winner = GameEngine.check_winner(opp_board)
+                if opp_winner == opponent_id:
+                    # 相手が即勝ちできる手が存在する -> この候補手は絶対敗北 (0.0)
+                    has_immediate_loss = True
+                    break
+                else:
+                    # 相手の手の後の盤面（自分の手番としての盤面）
+                    state_vec = state2vec(opp_board, self.player_id)
+                    opp_next_states.append(state_vec)
+
+            if has_immediate_loss:
+                evals[m_idx] = 0.0  # 自滅手・相手の即勝ち (勝率 0%)
+                eval_determined[m_idx] = 0.0
             else:
-                # 遷移先の状態ベクトルを相手手番として取得
-                opponent_id = 3 - self.player_id
-                next_state_vec = state2vec(next_board, opponent_id)
-                next_states.append(next_state_vec)
+                move_opp_states[m_idx] = len(opp_next_states)
+                for s_vec in opp_next_states:
+                    batch_mapping.append(m_idx)
+                    all_batch_states.append(s_vec)
 
-        # 2. モデルによる一括評価（バッチ処理）
-        evals = self.np.zeros(len(legal_moves), dtype=self.np.float32)
-        batch_states = []
-        batch_indices = []
-
-        for idx, state_vec in enumerate(next_states):
-            if idx in immediate_win_indices:
-                evals[idx] = 1.0  # 即勝ちの手は評価値 1.0 (最大)
-            else:
-                batch_states.append(state_vec)
-                batch_indices.append(idx)
-
-        if batch_states:
-            # 状態ベクトルを一括で NumPy 配列にする (形: [N, 139])
-            batch_array = self.np.array(batch_states, dtype=self.np.float32)
-            # predict() は遅いため、直接 model() を呼び出す
-            predictions = self.model(batch_array, training=False).numpy().flatten()
+        # 3. 未確定の局面を一括バッチ推論
+        if all_batch_states:
+            batch_array = self.np.array(all_batch_states, dtype=self.np.float32)
+            # predict() はオーバーヘッドが大きいため直接モデルを呼び出す
+            preds = self.model(batch_array, training=False).numpy().flatten()
             
-            # モデルの出力（相手番の評価）を自分から見た評価に反転
-            for idx, pred in zip(batch_indices, predictions):
-                evals[idx] = -pred
+            # 各候補手ごとに、相手の最善応手（自分にとって勝率が最小 = Min）を集計
+            move_preds = {m_idx: [] for m_idx in move_opp_states}
+            for m_idx, pred in zip(batch_mapping, preds):
+                move_preds[m_idx].append(pred)
 
-        # 3. 合法手と評価値をソートして出力 (すべて調べて示す)
-        print(f"\n--- プレイヤー {self.player_id} (AI) 合法手評価リスト ---")
-        sorted_indices = self.np.argsort(evals)[::-1]
-        for rank, idx in enumerate(sorted_indices):
-            move = legal_moves[idx]
-            val = evals[idx]
-            print(f"  [{rank}] {move} -> 評価値: {val:.4f}")
+            for m_idx, pred_list in move_preds.items():
+                if pred_list:
+                    # 相手は自分にとって最も厳しい手を選ぶ (Min)
+                    evals[m_idx] = float(min(pred_list))
+                else:
+                    evals[m_idx] = 0.5
 
-        # 4. 固定の逆温度 beta を使用
+        # 4. ソフトマックス関数を用いて選択確率を計算
         beta = self.beta
-        best_idx = sorted_indices[0]
+        best_idx = int(self.np.argmax(evals))
 
-        # 5. ソフトマックス関数を用いて選択確率を計算
-        shifted_evals = evals - evals[best_idx]  # オーバーフロー防止
+        # オーバーフロー防止のためのシフト
+        shifted_evals = evals - evals[best_idx]
         exp_vals = self.np.exp(beta * shifted_evals)
         probs = exp_vals / self.np.sum(exp_vals)
 
-        # 確率一覧を表示
-        print(f"  (設定値 - 逆温度 beta: {beta:.4f})")
-        print("  選択確率:")
-        for rank, idx in enumerate(sorted_indices):
-            move = legal_moves[idx]
-            p = probs[idx]
-            print(f"    {move}: {p*100:.2f}%")
-
-        # 6. 確率分布に従ってランダム選択
+        # 5. 確率分布に従って手を選択
         choice_idx = self.np.random.choice(len(legal_moves), p=probs)
         selected_move = legal_moves[choice_idx]
-        print(f"  AIが選択した手: {selected_move} (確率: {probs[choice_idx]*100:.2f}%)")
 
         return selected_move
-
-

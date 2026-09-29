@@ -2,3 +2,5 @@ __pycache__
 .venv
 *.pkl
 *.yaml
+*.npy
+legacy_v1/

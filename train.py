@@ -1,56 +1,77 @@
 """
-学習用スクリプト
+学習用スクリプト (CNN + Binary Cross-Entropy + 100%全件学習)
 """
 
 import numpy as np
 from tensorflow import keras
-from sklearn.model_selection import train_test_split
 
 def get_data():
-    print("データセットをロードしています...")
+    print("データセットをロードしています: train_data.npy ...")
     dataset = np.load("train_data.npy")
     
     # 0〜138列目: 状態ベクトル (139次元)
-    X = dataset[:, :139]
-    # 139列目: 平均評価値 (1次元)
-    y = dataset[:, 139]
+    X = dataset[:, :139].astype(np.float32)
+    # 139列目: 勝率ラベル (0.0〜1.0)
+    y = dataset[:, 139].astype(np.float32)
     
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    # 100%全件を学習に投入（テストデータ除外による記憶欠落を防止）
+    # データをシャッフル
+    indices = np.arange(len(X))
+    np.random.shuffle(indices)
+    X_train = X[indices]
+    y_train = y[indices]
     
-    print(f"学習データ数: {X_train.shape[0]}")
-    print(f"テストデータ数: {X_test.shape[0]}")
-    return X_train, y_train, X_test, y_test
+    print(f"学習データ数: {X_train.shape[0]} (全件学習)")
+    return X_train, y_train
 
 def create_model():
-    # 入力層 139次元、出力層 1次元の回帰モデル (パターンA: 512 -> 256 -> 1)
-    model = keras.Sequential([
-        keras.layers.Input(shape=(139,)),
-        keras.layers.Dense(512, activation="relu"),
-        keras.layers.Dense(256, activation="relu"),
-        # 出力値を評価値の範囲（-1.0〜1.0）にするため tanh を使用
-        keras.layers.Dense(1, activation="tanh")
-    ])
+    """
+    盤面 (4, 3, 11) を CNN で空間認識し、持ち駒・手番 (7) と結合して勝率 (0〜1) を出力するモデル
+    """
+    inputs = keras.layers.Input(shape=(139,), name="state_input")
     
-    # 損失関数として平均二乗誤差 (MSE) 
+    # 盤面部分 (132次元) をスライスして (4, 3, 11) に Reshape
+    board_vec = inputs[:, :132]
+    board_tensor = keras.layers.Reshape((4, 3, 11))(board_vec)
+    
+    # 持ち駒・手番部分 (7次元)
+    meta_vec = inputs[:, 132:]
+    
+    # 畳み込み層（3x3 フィルタで局所的な駒の利き・位置関係を抽出）
+    x = keras.layers.Conv2D(64, kernel_size=(3, 3), padding="same", activation="relu")(board_tensor)
+    x = keras.layers.Conv2D(64, kernel_size=(3, 3), padding="same", activation="relu")(x)
+    x = keras.layers.Flatten()(x) # 4 * 3 * 64 = 768次元
+    
+    # 持ち駒・手番と結合
+    concat = keras.layers.Concatenate()([x, meta_vec]) # 768 + 7 = 775次元
+    
+    # 全結合層
+    h = keras.layers.Dense(256, activation="relu")(concat)
+    h = keras.layers.Dense(128, activation="relu")(h)
+    
+    # 出力層: 勝率 (0.0〜1.0)
+    outputs = keras.layers.Dense(1, activation="sigmoid", name="win_rate")(h)
+    
+    model = keras.models.Model(inputs=inputs, outputs=outputs)
+    
+    # 二値交差エントロピー損失 (BCE) で端点の妥協を排除
     model.compile(
         optimizer="adam",
-        loss="mean_squared_error",
-        metrics=["mae"]  # 評価指標として平均絶対誤差 (MAE) 
+        loss="binary_crossentropy",
+        metrics=["mae"]
     )
     return model
 
 def main():
     # 1. データの取得
-    X_train, y_train, X_test, y_test = get_data()
+    X_train, y_train = get_data()
     
-    # 2. モデルの作成
+    # 2. モデルの作成 (スクラッチ学習)
     model = create_model()
     model.summary()
     
     # 3. 学習 
-    epochs = 10
+    epochs = 15
     batch_size = 256
     print(f"学習を開始します (エポック数: {epochs}, バッチサイズ: {batch_size})...")
     
@@ -58,20 +79,23 @@ def main():
         X_train, y_train,
         epochs=epochs,
         batch_size=batch_size,
-        validation_data=(X_test, y_test),
+        shuffle=True,
         verbose=2
     )
     
-    # 4. 評価
-    print("テストデータで評価を行っています...")
-    test_loss, test_mae = model.evaluate(X_test, y_test, verbose=0)
-    print(f"Test Loss (MSE) = {test_loss:.6f}")
-    print(f"Test MAE = {test_mae:.6f}")
-    
-    # 5. 保存
+    # 4. 保存
     model_filename = "animal_shogi_model.keras"
     model.save(model_filename)
     print(f"モデルを保存しました: {model_filename}")
 
 if __name__ == "__main__":
-    main()
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "--init":
+        print("ランダム初期化された初期モデル (Gen0) を作成して保存します...")
+        init_model = create_model()
+        init_model.summary()
+        model_filename = "animal_shogi_model.keras"
+        init_model.save(model_filename)
+        print(f"初期モデルを保存しました: {model_filename}")
+    else:
+        main()
