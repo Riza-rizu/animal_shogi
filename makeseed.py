@@ -1,5 +1,5 @@
-n_files = 16  # サーバーの 16 並列 (mpirun -np 16) とぴったり一致
-games_per_file = 1000  # 1ファイルあたり1,000試合 (合計16,000試合、約15分で完了)
+n_files = 15  # サーバーの 15 ワーカー (mpirun -np 16: マスター1 + ワーカー15) と完全一致
+games_per_file = 1000  # 1ファイルあたり1,000試合 (合計15,000試合、約15分で完了)
 
 for i in range(n_files):
     with open(f"input{i:03d}.yaml", "w") as f:
