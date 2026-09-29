@@ -60,8 +60,11 @@ def load_keras_model_safe(model_path):
         return tf.keras.models.load_model(model_path)
     except Exception as e:
         err_msg = str(e)
-        if "quantization_config" in err_msg or "Unrecognized keyword arguments" in err_msg:
-            print(f"警告: モデル {model_path} の互換性エラーを検出しました（quantization_config）。自動修復してロードを試みます...")
+        if ("quantization_config" in err_msg or 
+            "Unrecognized keyword arguments" in err_msg or 
+            "unexpected keyword argument" in err_msg or 
+            "input_axes" in err_msg):
+            print(f"警告: モデル {model_path} の互換性エラーを検出しました（Kerasバージョン差）。自動修復してロードを試みます...")
             cleaned_path = None
             try:
                 fd, cleaned_path = tempfile.mkstemp(suffix=".keras")
@@ -77,6 +80,8 @@ def load_keras_model_safe(model_path):
                                 def remove_keys(d):
                                     if isinstance(d, dict):
                                         d.pop('quantization_config', None)
+                                        d.pop('input_axes', None)
+                                        d.pop('output_axes', None)
                                         for k, v in list(d.items()):
                                             remove_keys(v)
                                     elif isinstance(d, list):
