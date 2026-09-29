@@ -4,6 +4,11 @@ AI プレイヤーモジュール (深さ2のMin-Max探索 + CNN勝率モデル)
 
 import os
 import sys
+import warnings
+
+# 不要な TensorFlow / Keras 警告ログを完全に抑制
+warnings.filterwarnings("ignore")
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import numpy as np
 
 # プロジェクトルートのパス解決
@@ -94,7 +99,6 @@ def load_keras_model_safe(model_path):
                             
                 model = tf.keras.models.load_model(cleaned_path)
                 os.remove(cleaned_path)
-                print("モデルの自動修復ロードに成功しました。")
                 return model
             except Exception as clean_err:
                 print(f"修復失敗: {clean_err}")
@@ -128,7 +132,6 @@ class ModelPlayer:
         if isinstance(model_path_or_model, str):
             try:
                 self.model = load_keras_model_safe(model_path_or_model)
-                print(f"モデル {model_path_or_model} を正常にロードしました。")
             except Exception as e:
                 print(f"エラー: モデル {model_path_or_model} のロードに失敗しました: {e}")
                 raise e

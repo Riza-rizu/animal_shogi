@@ -4,3 +4,7 @@ __pycache__
 *.yaml
 *.npy
 legacy_v1/
+animal_shogi_model_gen*.keras
+summary_*.txt
+*summary.txt
+*.png

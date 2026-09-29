@@ -13,7 +13,7 @@ import shutil
 import random
 
 # 古いデータの影響力を落とす減衰率 (0.0 〜 1.0)
-DECAY_FACTOR = 0.95
+DECAY_FACTOR = 0.80
 CUMULATIVE_FILE = "cumulative_dataset.pkl"
 ARCHIVE_DIR = "processed_pkl"
 MAX_SAMPLES_PER_BIN = 1000  # 各ビン（0.1刻み）あたりの最大サンプリング数
