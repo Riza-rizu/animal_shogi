@@ -1,5 +1,5 @@
 n_files = 100
-games_per_file = 10000
+games_per_file = 1000  # 1ファイルあたり1,000試合 (合計100,000試合、約10〜15分で完了)
 
 for i in range(n_files):
     with open(f"input{i:03d}.yaml", "w") as f:
@@ -13,4 +13,3 @@ for i in range(n_files):
 with open("tasks.sh", "w") as f:
     for i in range(n_files):
         f.write(f".venv/bin/python main.py input{i:03d}.yaml\n")
-
