@@ -302,8 +302,8 @@ def run_self_match(m_name, m_path, num_games=1000, beta=10.0, num_workers=6, sav
 def main():
     parser = argparse.ArgumentParser(description="どうぶつしょうぎ 万能対戦スクリプト")
     parser.add_argument("--preset", type=str, default=None,
-                        choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "all"],
-                        help="プリセット番号 (1:新Gen2 vs 新Gen1, 2:新Gen1 vs 元Gen5, 3:新Gen2 vs 元Gen6, 4:新Gen2同士, 5:新Gen3 vs 新Gen2, 6:新Gen3同士, 7:新Gen4 vs 新Gen3, 8:新Gen4同士, 9:新Gen4 vs 新Gen2, 10:新Gen4 vs 元Gen7, 11:新Gen5 vs 新Gen4, 12:新Gen5 vs 新Gen3, 13:新Gen5 vs 元Gen7, 14:新Gen5同士, 15:新Gen2 vs 旧Gen4, 16:新Gen3(0.80) vs Gen3(0.95), 17:新Gen4(0.80) vs Gen4(0.95), 18:新Gen5(0.80) vs Gen5(0.95), 19:新Gen6 vs 新Gen5, 20:新Gen6 vs 新Gen4, 21:新Gen6同士, 22:新Gen5 vs 旧Gen5, 23:新Gen5 vs 旧Gen6, all:全て連続実行)")
+                        choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "all"],
+                        help="プリセット番号 (24:新Gen5_MSE vs 元Gen7, 25:新Gen5_MSE vs 新Gen4, 26:新Gen5_MSE vs 新Gen5(BCE), 27:新Gen5_MSE同士)")
     parser.add_argument("--m1", type=str, default=None, help="モデル1パス")
     parser.add_argument("--m2", type=str, default=None, help="モデル2パス")
     parser.add_argument("--name1", type=str, default="Model1", help="モデル1名称")
