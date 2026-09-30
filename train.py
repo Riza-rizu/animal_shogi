@@ -50,15 +50,15 @@ def create_model():
     h = keras.layers.Dense(256, activation="relu")(concat)
     h = keras.layers.Dense(128, activation="relu")(h)
     
-    # 出力層: 勝率 (0.0〜1.0)
-    outputs = keras.layers.Dense(1, activation="sigmoid", name="win_rate")(h)
+    # 出力層: 評価値 (-1.0〜1.0)
+    outputs = keras.layers.Dense(1, activation="tanh", name="eval_value")(h)
     
     model = keras.models.Model(inputs=inputs, outputs=outputs)
     
-    # 二値交差エントロピー損失 (BCE) で端点の妥協を排除
+    # 平均二乗誤差 (MSE) で滑らかな連続値（優劣度合い）を回帰学習
     model.compile(
         optimizer="adam",
-        loss="binary_crossentropy",
+        loss="mean_squared_error",
         metrics=["mae"]
     )
     return model
@@ -67,29 +67,14 @@ def main():
     # 1. データの取得
     X_train, y_train = get_data()
     
-    # 2. モデルの準備 (前世代のモデルが存在すればロードして追加学習、なければスクラッチ作成)
+    # 2. モデルの準備 (MSE / tanh への刷新のためスクラッチ作成)
     model_filename = "animal_shogi_model.keras"
-    if os.path.exists(model_filename):
-        print(f"既存のモデル（前世代）をロードして追加学習（ファインチューニング）します: {model_filename}")
-        try:
-            model = keras.models.load_model(model_filename)
-            # 前世代の知識を急激に壊さないよう、学習率をやや控えめ (0.0005) に設定
-            model.compile(
-                optimizer=keras.optimizers.Adam(learning_rate=0.0005),
-                loss="binary_crossentropy",
-                metrics=["mae"]
-            )
-        except Exception as e:
-            print(f"警告: 既存モデルのロードに失敗しました ({e})。新規作成します。")
-            model = create_model()
-    else:
-        print("新規モデルを作成します (スクラッチ学習)...")
-        model = create_model()
-        
+    print("損失関数 MSE (平均二乗誤差) + 出力層 tanh (-1.0〜1.0) のモデルを作成します...")
+    model = create_model()
     model.summary()
     
     # 3. 学習 
-    epochs = 50
+    epochs = 30
     batch_size = 256
     print(f"学習を開始します (エポック数: {epochs}, バッチサイズ: {batch_size})...")
     

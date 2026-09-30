@@ -138,6 +138,26 @@ class ModelPlayer:
         else:
             self.model = model_path_or_model
 
+        # 出力層の活性化関数（tanh か sigmoid か）を自動判定
+        self.is_tanh = False
+        try:
+            last_layer = self.model.layers[-1]
+            act = getattr(last_layer, 'activation', None)
+            act_name = getattr(act, '__name__', '')
+            if 'tanh' in act_name.lower():
+                self.is_tanh = True
+        except Exception:
+            pass
+
+        if self.is_tanh:
+            self.win_val = 1.0
+            self.loss_val = -1.0
+            self.neutral_val = 0.0
+        else:
+            self.win_val = 1.0
+            self.loss_val = 0.0
+            self.neutral_val = 0.5
+
     def choose_move(self, board, legal_moves):
         """
         深さ2のMin-Max探索により、相手の反撃を織り込んだ勝率評価値で手を選択する
@@ -163,15 +183,15 @@ class ModelPlayer:
             # 1. 自分が即座に勝利できる手か？
             winner = GameEngine.check_winner(next_board)
             if winner == self.player_id:
-                evals[m_idx] = 1.0  # 即勝ち (勝率 100%)
-                eval_determined[m_idx] = 1.0
+                evals[m_idx] = self.win_val  # 即勝ち (勝率100% または 評価値+1.0)
+                eval_determined[m_idx] = self.win_val
                 continue
 
             # 2. 相手の手番を展開
             opp_legal_moves = GameEngine.get_legal_moves(next_board, opponent_id)
             if not opp_legal_moves:
-                evals[m_idx] = 1.0  # 相手の手がない＝自分の勝ち
-                eval_determined[m_idx] = 1.0
+                evals[m_idx] = self.win_val  # 相手の手がない＝自分の勝ち
+                eval_determined[m_idx] = self.win_val
                 continue
 
             # 相手の合法手の中に「相手の即勝ち（自ライオン捕獲など）」があるか？
@@ -183,7 +203,7 @@ class ModelPlayer:
                 GameEngine.make_move(opp_board, opp_move, opponent_id)
                 opp_winner = GameEngine.check_winner(opp_board)
                 if opp_winner == opponent_id:
-                    # 相手が即勝ちできる手が存在する -> この候補手は絶対敗北 (0.0)
+                    # 相手が即勝ちできる手が存在する -> この候補手は絶対敗北
                     has_immediate_loss = True
                     break
                 else:
@@ -192,8 +212,8 @@ class ModelPlayer:
                     opp_next_states.append(state_vec)
 
             if has_immediate_loss:
-                evals[m_idx] = 0.0  # 自滅手・相手の即勝ち (勝率 0%)
-                eval_determined[m_idx] = 0.0
+                evals[m_idx] = self.loss_val  # 自滅手・相手の即勝ち (勝率0% または 評価値-1.0)
+                eval_determined[m_idx] = self.loss_val
             else:
                 move_opp_states[m_idx] = len(opp_next_states)
                 for s_vec in opp_next_states:
@@ -216,7 +236,7 @@ class ModelPlayer:
                     # 相手は自分にとって最も厳しい手を選ぶ (Min)
                     evals[m_idx] = float(min(pred_list))
                 else:
-                    evals[m_idx] = 0.5
+                    evals[m_idx] = self.neutral_val
 
         # 4. ソフトマックス関数を用いて選択確率を計算
         beta = self.beta

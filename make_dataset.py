@@ -98,14 +98,12 @@ def main():
     bins = [[] for _ in range(10)]
     
     for state_key, (count, mean_val) in cumulative_data.items():
-        # mean_val (-1.0〜1.0) を勝率 (0.0〜1.0) に変換
+        # mean_val (-1.0〜1.0) を元にビンインデックス (0〜9) を決定
         win_rate = (mean_val + 1.0) / 2.0
         win_rate = np.clip(win_rate, 0.0, 1.0)
-        
-        # ビンインデックスの決定 (0〜9)
-        # 1.0 の場合はビン 9 に所属
         bin_idx = min(int(win_rate * 10), 9)
-        bins[bin_idx].append((state_key, win_rate))
+        # 評価値は元の連続値 (-1.0〜1.0) をそのまま保持
+        bins[bin_idx].append((state_key, float(mean_val)))
 
     sampled_dataset = []
     print(f"各ビンの登録局面数とサンプリング数 (上限: {MAX_SAMPLES_PER_BIN}件):")
@@ -129,13 +127,13 @@ def main():
     # サンプルをシャッフル
     random.shuffle(sampled_dataset)
 
-    # 学習用 NumPy 配列 (train_data.npy) の作成
+    # 学習用 NumPy 配列 (train_data.npy) の作成 (139列目は -1.0〜1.0 の連続値)
     num_items = len(sampled_dataset)
     dataset_array = np.empty((num_items, 140), dtype=np.float32)
 
-    for idx, (state_key, win_rate) in enumerate(sampled_dataset):
+    for idx, (state_key, val) in enumerate(sampled_dataset):
         dataset_array[idx, :139] = list(state_key)
-        dataset_array[idx, 139] = win_rate
+        dataset_array[idx, 139] = val
 
     output_filename = "train_data.npy"
     np.save(output_filename, dataset_array)
