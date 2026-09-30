@@ -16,7 +16,7 @@ import random
 DECAY_FACTOR = 0.80
 CUMULATIVE_FILE = "cumulative_dataset.pkl"
 ARCHIVE_DIR = "processed_pkl"
-MAX_SAMPLES_PER_BIN = 1000  # 各ビン（0.1刻み）あたりの最大サンプリング数
+MAX_SAMPLES_PER_BIN = 3000  # 各ビン（0.1刻み）あたりの最大サンプリング数 (合計最大30,000件)
 
 def main():
     # ディレクトリ内の output*.pkl ファイルを取得

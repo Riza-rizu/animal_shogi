@@ -2,6 +2,7 @@
 学習用スクリプト (CNN + Binary Cross-Entropy + 100%全件学習)
 """
 
+import os
 import numpy as np
 from tensorflow import keras
 
@@ -66,8 +67,25 @@ def main():
     # 1. データの取得
     X_train, y_train = get_data()
     
-    # 2. モデルの作成 (スクラッチ学習)
-    model = create_model()
+    # 2. モデルの準備 (前世代のモデルが存在すればロードして追加学習、なければスクラッチ作成)
+    model_filename = "animal_shogi_model.keras"
+    if os.path.exists(model_filename):
+        print(f"既存のモデル（前世代）をロードして追加学習（ファインチューニング）します: {model_filename}")
+        try:
+            model = keras.models.load_model(model_filename)
+            # 前世代の知識を急激に壊さないよう、学習率をやや控えめ (0.0005) に設定
+            model.compile(
+                optimizer=keras.optimizers.Adam(learning_rate=0.0005),
+                loss="binary_crossentropy",
+                metrics=["mae"]
+            )
+        except Exception as e:
+            print(f"警告: 既存モデルのロードに失敗しました ({e})。新規作成します。")
+            model = create_model()
+    else:
+        print("新規モデルを作成します (スクラッチ学習)...")
+        model = create_model()
+        
     model.summary()
     
     # 3. 学習 
@@ -84,7 +102,6 @@ def main():
     )
     
     # 4. 保存
-    model_filename = "animal_shogi_model.keras"
     model.save(model_filename)
     print(f"モデルを保存しました: {model_filename}")
 
