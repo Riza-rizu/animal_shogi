@@ -138,7 +138,7 @@ def run_single_series(m1_name, m1_path, m2_name, m2_path, num_games, beta=10.0, 
     return {
         "p1_name": m1_name, "p2_name": m2_name,
         "p1_wins": p1_wins, "p2_wins": p2_wins, "draws": draws,
-        "moves": all_moves,
+        "moves": all_moves, "winners": all_winners,
         "p3": p3, "p4": p4, "p5": p5, "p6": p6,
         "num_games": num_games
     }
@@ -162,6 +162,28 @@ def run_versus_match(m1_name, m1_path, m2_name, m2_path, games_per_side=500, bet
     tot_p5 = res_A["p5"] + res_B["p5"]
     tot_p6 = res_A["p6"] + res_B["p6"]
     tot_3to6 = tot_p3 + tot_p4 + tot_p5 + tot_p6
+
+    # 7手以上の実力勝負集計 (即死手除外)
+    mask_7_A = res_A["moves"] >= 7
+    games_7_A = int(np.sum(mask_7_A))
+    m1_wins_7_A = int(np.sum((res_A["winners"] == PLAYER_1) & mask_7_A))
+    m2_wins_7_A = int(np.sum((res_A["winners"] == PLAYER_2) & mask_7_A))
+    draws_7_A = int(np.sum((res_A["winners"] == RESULT_DRAW) & mask_7_A))
+
+    mask_7_B = res_B["moves"] >= 7
+    games_7_B = int(np.sum(mask_7_B))
+    m1_wins_7_B = int(np.sum((res_B["winners"] == PLAYER_2) & mask_7_B))
+    m2_wins_7_B = int(np.sum((res_B["winners"] == PLAYER_1) & mask_7_B))
+    draws_7_B = int(np.sum((res_B["winners"] == RESULT_DRAW) & mask_7_B))
+
+    tot_games_7 = games_7_A + games_7_B
+    tot_m1_wins_7 = m1_wins_7_A + m1_wins_7_B
+    tot_m2_wins_7 = m2_wins_7_A + m2_wins_7_B
+    tot_draws_7 = draws_7_A + draws_7_B
+
+    pct_m1_7 = (tot_m1_wins_7 / tot_games_7 * 100) if tot_games_7 > 0 else 0.0
+    pct_m2_7 = (tot_m2_wins_7 / tot_games_7 * 100) if tot_games_7 > 0 else 0.0
+    pct_draws_7 = (tot_draws_7 / tot_games_7 * 100) if tot_games_7 > 0 else 0.0
 
     summary_text = f"""
 =================================================================================
@@ -203,6 +225,11 @@ def run_versus_match(m1_name, m1_path, m2_name, m2_path, games_per_side=500, bet
     ★ 5手決着数          : {tot_p5:4d} 局 ({tot_p5/total_games*100:5.2f}%)
     ★ 6手決着数          : {tot_p6:4d} 局 ({tot_p6/total_games*100:5.2f}%)
     ★ 3〜6手決着 合計    : {tot_3to6:4d} 局 ({tot_3to6/total_games*100:5.2f}%)
+    -----------------------------------------------------------------------------
+    【重要指標】7手以上の実力勝負 (3〜6手即死手除外: 計 {tot_games_7} 局)
+    ★ {m1_name} 勝利 : {tot_m1_wins_7:4d} 局 ({pct_m1_7:5.2f}%)
+    ★ {m2_name} 勝利 : {tot_m2_wins_7:4d} 局 ({pct_m2_7:5.2f}%)
+    ★ 引き分け       : {tot_draws_7:4d} 局 ({pct_draws_7:5.2f}%)
 =================================================================================
 """
     print(summary_text)
@@ -302,6 +329,8 @@ def main():
     g3_decay095_path = "models_decay095/animal_shogi_model_gen3_decay095.keras"
     g4_decay095_path = "models_decay095/animal_shogi_model_gen4_decay095.keras"
     g5_decay095_path = "models_decay095/animal_shogi_model_gen5_decay095.keras"
+    g5_mse_path = "animal_shogi_model_gen5_mse.keras"
+    g5_ep15_path = "animal_shogi_model_gen5_ep15.keras"
 
     if args.preset == "1":
         # 1. 新Gen2 vs 新Gen1 (先後各500局)
@@ -395,6 +424,22 @@ def main():
         # 23. 新Gen5 vs 旧Gen6 (先後各500局)
         run_versus_match("新Gen5", g5_new_path, "旧Gen6", g6_path,
                          games_per_side=500, beta=args.beta, num_workers=args.workers, save_prefix="gen5_vs_old_gen6")
+    elif args.preset == "24":
+        # 24. 新Gen5_MSE vs 元Gen7 (先後各500局)
+        run_versus_match("新Gen5_MSE", g5_mse_path, "元Gen7", g7_path,
+                         games_per_side=500, beta=args.beta, num_workers=args.workers, save_prefix="gen5_mse_vs_old_gen7")
+    elif args.preset == "25":
+        # 25. 新Gen5_MSE vs 新Gen4 (先後各500局)
+        run_versus_match("新Gen5_MSE", g5_mse_path, "新Gen4", g4_path,
+                         games_per_side=500, beta=args.beta, num_workers=args.workers, save_prefix="gen5_mse_vs_gen4")
+    elif args.preset == "26":
+        # 26. 新Gen5_MSE vs 新Gen5(BCE) (先後各500局)
+        run_versus_match("新Gen5_MSE", g5_mse_path, "新Gen5_BCE", g5_ep15_path,
+                         games_per_side=500, beta=args.beta, num_workers=args.workers, save_prefix="gen5_mse_vs_gen5_bce")
+    elif args.preset == "27":
+        # 27. 新Gen5_MSE 同士 (1,000局)
+        run_self_match("新Gen5_MSE", g5_mse_path,
+                       num_games=1000, beta=args.beta, num_workers=args.workers, save_prefix="gen5_mse")
     elif args.preset == "all":
         print("\n" + "=" * 70)
         print(" 【全4カード連続対戦ベンチマークを開始します】")
