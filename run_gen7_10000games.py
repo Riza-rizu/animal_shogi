@@ -1,10 +1,15 @@
 """
-元Gen7 同士 10,000局対戦 & 手数分布グラフ生成スクリプト
+元Gen7 同士 10,000局対戦 & 手数分布グラフ・棋譜ログ生成スクリプト
 （最新の深さ2探索・tanh自滅手=-1.0適用版）
+・1手刻みの詳細手数分布テーブル
+・10手目までの進行と勝敗の完全記録 (CSV & JSON)
+・当時と完全同一形式の手数出現頻度ヒストグラム画像
 """
 
 import os
 import sys
+import csv
+import json
 import warnings
 import logging
 
@@ -26,11 +31,23 @@ if repo_dir not in sys.path:
 from board import Board
 from player import ModelPlayer
 from engine import GameEngine
-from constants import PLAYER_1, PLAYER_2, RESULT_DRAW
+from constants import PLAYER_1, PLAYER_2, RESULT_DRAW, PIECE_DISPLAY
 
 # 日本語フォント設定（Windows環境対応）
 plt.rcParams['font.sans-serif'] = ['Meiryo', 'MS Gothic', 'Yu Gothic', 'DejaVu Sans', 'sans-serif']
 plt.rcParams['axes.unicode_minus'] = False
+
+def format_move(move):
+    """着手を人間が読みやすい文字列にフォーマット (例: B3ヒB2, 打ヒA3)"""
+    col_names = ["A", "B", "C"]
+    row_names = ["1", "2", "3", "4"]
+    p_name = PIECE_DISPLAY.get(move.piece, move.piece).strip()
+    
+    to_str = f"{col_names[move.to_pos[0]]}{row_names[move.to_pos[1]]}"
+    if move.is_drop:
+        return f"打{p_name}{to_str}"
+    from_str = f"{col_names[move.from_pos[0]]}{row_names[move.from_pos[1]]}"
+    return f"{from_str}{p_name}{to_str}"
 
 def play_batch_worker(worker_id, num_games, model_path, beta, seed):
     import os
@@ -46,8 +63,7 @@ def play_batch_worker(worker_id, num_games, model_path, beta, seed):
     p2 = ModelPlayer(PLAYER_2, model_path_or_model=model_path, beta=beta)
     players = {PLAYER_1: p1, PLAYER_2: p2}
 
-    move_counts = []
-    winners = []
+    results = []
 
     for _ in range(num_games):
         board = Board()
@@ -56,6 +72,7 @@ def play_batch_worker(worker_id, num_games, model_path, beta, seed):
         max_moves = 200
         winner = None
         game_moves = 0
+        history_moves = []
 
         for _ in range(max_moves):
             legal_moves = GameEngine.get_legal_moves(board, current_p)
@@ -64,6 +81,10 @@ def play_batch_worker(worker_id, num_games, model_path, beta, seed):
                 break
             move = players[current_p].choose_move(board, legal_moves)
             game_moves += 1
+
+            if len(history_moves) < 10:
+                history_moves.append(format_move(move))
+
             GameEngine.make_move(board, move, current_p)
 
             winner = GameEngine.check_winner(board)
@@ -73,10 +94,9 @@ def play_batch_worker(worker_id, num_games, model_path, beta, seed):
         else:
             winner = RESULT_DRAW
 
-        move_counts.append(game_moves)
-        winners.append(winner)
+        results.append((game_moves, winner, history_moves))
 
-    return move_counts, winners
+    return results
 
 def plot_move_distribution(move_counts, gen_name, stats, output_path):
     """手数の分布棒グラフ（ヒストグラム）を当時と完全同一のデザインでプロットして保存"""
@@ -93,7 +113,7 @@ def plot_move_distribution(move_counts, gen_name, stats, output_path):
     plt.axvline(stats['avg'], color='#e74c3c', linestyle='dashed', linewidth=2, label=f"平均手数: {stats['avg']:.1f} 手")
     plt.axvline(stats['med'], color='#2ecc71', linestyle='dotted', linewidth=2, label=f"中央値: {stats['med']:.0f} 手")
     
-    plt.title(f"【{gen_name} 同士の対戦 (深さ2探索)】 手数の出現頻度分布 (総対戦数: {len(move_counts)} 局)", fontsize=14, fontweight='bold', pad=15)
+    plt.title(f"【{gen_name} 同士の対戦】 手数の出現頻度分布 (総対戦数: {len(move_counts)} 局)", fontsize=14, fontweight='bold', pad=15)
     plt.xlabel("決着までの手数 (Moves)", fontsize=12)
     plt.ylabel("対局数 (Games)", fontsize=12)
     plt.grid(axis='y', linestyle='--', alpha=0.6)
@@ -101,18 +121,16 @@ def plot_move_distribution(move_counts, gen_name, stats, output_path):
     # 統計情報のテキストボックス (後手勝率を含む)
     info_text = (
         f"総対戦数: {len(move_counts)} 局\n"
-        f"平均手数: {stats['avg']:.2f} 手\n"
+        f"平均手数: {stats['avg']:.1f} 手\n"
         f"中央値: {stats['med']:.0f} 手\n"
         f"最短手数: {stats['min']} 手\n"
         f"最長手数: {stats['max']} 手\n"
-        f"先手勝率: {stats['p1_win_rate']:.2f}%\n"
-        f"後手勝率: {stats['p2_win_rate']:.2f}%\n"
-        f"千日手 (200手): {stats['draws']} 局 ({stats['draw_rate']:.2f}%)\n"
-        f"3〜6手即死: {stats['tot_3to6']} 局 ({stats['p_3to6']:.2f}%)"
+        f"千日手 (200手): {stats['draws']} 局 ({stats['draw_rate']:.1f}%)\n"
+        f"後手勝率: {stats['p2_win_rate']:.1f}%"
     )
     plt.gca().text(
         0.72, 0.95, info_text, transform=plt.gca().transAxes,
-        fontsize=10.5, verticalalignment='top',
+        fontsize=11, verticalalignment='top',
         bbox=dict(boxstyle='round,pad=0.6', facecolor='#ffffff', edgecolor='#bdc3c7', alpha=0.9)
     )
     
@@ -151,8 +169,7 @@ def main():
         task_games.append(c)
         remaining -= c
 
-    all_moves = []
-    all_winners = []
+    all_results = []
     completed_games = 0
     last_reported = 0
 
@@ -162,10 +179,9 @@ def main():
             for i, n in enumerate(task_games)
         ]
         for f in as_completed(futures):
-            moves, winners = f.result()
-            all_moves.extend(moves)
-            all_winners.extend(winners)
-            completed_games += len(moves)
+            batch_res = f.result()
+            all_results.extend(batch_res)
+            completed_games += len(batch_res)
 
             while completed_games >= last_reported + 500 and last_reported + 500 <= args.games:
                 last_reported += 500
@@ -176,18 +192,42 @@ def main():
         print(f"  進捗: {args.games:5d} / {args.games} 局完了 (100.0%)")
         sys.stdout.flush()
 
+    # 集計処理
+    all_moves = []
+    all_winners = []
+    game_records = []
+
+    move_keys = [f"move_{i+1}" for i in range(10)]
+
+    for g_idx, (m_count, winner, hist_moves) in enumerate(all_results):
+        all_moves.append(m_count)
+        all_winners.append(winner)
+
+        if winner == PLAYER_1:
+            w_str = "先手(1)"
+        elif winner == PLAYER_2:
+            w_str = "後手(2)"
+        else:
+            w_str = "引き分け(千日手)"
+
+        rec = {
+            "game_id": g_idx + 1,
+            "generation": "Gen7_2ply",
+            "total_moves": m_count,
+            "winner_id": winner,
+            "winner_name": w_str,
+        }
+        for i in range(10):
+            rec[f"move_{i+1}"] = hist_moves[i] if i < len(hist_moves) else ""
+        rec["opening_10ply"] = " -> ".join(hist_moves)
+        game_records.append(rec)
+
     all_moves = np.array(all_moves)
     all_winners = np.array(all_winners)
 
     p1_wins = int(np.sum(all_winners == PLAYER_1))
     p2_wins = int(np.sum(all_winners == PLAYER_2))
     draws = int(np.sum(all_winners == RESULT_DRAW))
-
-    p3 = int(np.sum(all_moves == 3))
-    p4 = int(np.sum(all_moves == 4))
-    p5 = int(np.sum(all_moves == 5))
-    p6 = int(np.sum(all_moves == 6))
-    tot_3to6 = p3 + p4 + p5 + p6
 
     avg_moves = float(np.mean(all_moves))
     med_moves = float(np.median(all_moves))
@@ -197,6 +237,12 @@ def main():
     p1_rate = p1_wins / args.games * 100
     p2_rate = p2_wins / args.games * 100
     draw_rate = draws / args.games * 100
+
+    p3 = int(np.sum(all_moves == 3))
+    p4 = int(np.sum(all_moves == 4))
+    p5 = int(np.sum(all_moves == 5))
+    p6 = int(np.sum(all_moves == 6))
+    tot_3to6 = p3 + p4 + p5 + p6
     p_3to6 = tot_3to6 / args.games * 100
 
     stats = {
@@ -214,18 +260,33 @@ def main():
         "p_3to6": p_3to6
     }
 
-    # グラフ生成・保存
+    # 1. 棋譜 CSV 保存 (Excel対応 utf-8-sig)
+    csv_path = os.path.join(repo_dir, "opening_data_Gen7_2ply.csv")
+    fieldnames = ["game_id", "generation", "total_moves", "winner_id", "winner_name"] + move_keys + ["opening_10ply"]
+    with open(csv_path, "w", newline="", encoding="utf-8-sig") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(game_records)
+    print(f"\n[棋譜データ CSV 保存完了] {csv_path}")
+
+    # 2. 棋譜 JSON 保存
+    json_path = os.path.join(repo_dir, "opening_data_Gen7_2ply.json")
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(game_records, f, ensure_ascii=False, indent=2)
+    print(f"[棋譜データ JSON 保存完了] {json_path}")
+
+    # 3. グラフ生成・保存 (当時と完全同一デザイン)
     graph_filename = f"moves_distribution_Gen7_2ply_{args.games}games.png"
     graph_path = os.path.join(repo_dir, graph_filename)
-    plot_move_distribution(all_moves, "元Gen7", stats, graph_path)
+    plot_move_distribution(all_moves, "Gen7", stats, graph_path)
 
-    # 手数分布テーブル
-    bins = [0, 5, 10, 15, 20, 25, 30, 40, 50, 75, 100, 200]
-    hist, _ = np.histogram(all_moves, bins=bins)
-    
+    # 4. 1手刻みの詳細手数分布テーブルの作成
+    unique_moves, counts = np.unique(all_moves, return_counts=True)
+    move_count_dict = dict(zip(unique_moves, counts))
+
     summary_text = f"""
 =================================================================================
-          元Gen7 同士 10,000局対戦分析結果 (最新: 深さ2探索 / 自滅手=-1.0)
+          元Gen7 同士 {args.games}局対戦分析結果 (最新: 深さ2探索 / 自滅手=-1.0)
 =================================================================================
 【対戦総数】 {args.games} 局 / 逆温度 beta = {args.beta}
 
@@ -247,14 +308,27 @@ def main():
   ★ 6手決着 : {p6:4d} 局 ({p6/args.games*100:5.2f}%)
   ★ 3〜6手決着 合計: {tot_3to6:4d} 局 ({p_3to6:5.2f}%)
 
-【手数分布テーブル】
+---------------------------------------------------------------------------------
+【1手ごとの詳細出現頻度分布 (1手刻みテーブル)】
+---------------------------------------------------------------------------------
+ 手数 (Moves) | 対局数 (Games) | 出現割合 (%) | 累積局数 | 累積割合 (%)
+---------------------------------------------------------------------------------
 """
-    for i in range(len(hist)):
-        summary_text += f"  {bins[i]:3d} - {bins[i+1]:3d} 手: {hist[i]:5d} 局 ({hist[i]/args.games*100:5.2f}%)\n"
+    cum_games = 0
+    for m in range(min_moves, max_moves + 1):
+        c = move_count_dict.get(m, 0)
+        cum_games += c
+        rate = c / args.games * 100
+        cum_rate = cum_games / args.games * 100
+        if c > 0 or (m <= 10):  # 10手以下は0局でも表示
+            summary_text += f"   {m:3d} 手    |    {c:5d} 局   |    {rate:5.2f} %  |  {cum_games:5d} 局 |   {cum_rate:5.2f} %\n"
 
-    summary_text += f"""
-【グラフ画像保存先】
-  {graph_path}
+    summary_text += f"""---------------------------------------------------------------------------------
+
+【保存ファイル一覧】
+  1. 棋譜 CSV : {csv_path}
+  2. 棋譜 JSON: {json_path}
+  3. グラフ画像: {graph_path}
 =================================================================================
 """
     print(summary_text)
