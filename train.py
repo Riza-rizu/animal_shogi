@@ -89,7 +89,7 @@ def main():
     model.summary()
     
     # 3. 学習 
-    epochs = 15
+    epochs = 50
     batch_size = 256
     print(f"学習を開始します (エポック数: {epochs}, バッチサイズ: {batch_size})...")
     
