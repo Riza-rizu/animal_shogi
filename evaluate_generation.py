@@ -75,7 +75,7 @@ def calculate_metrics(y_true, y_pred):
 
 
 def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename):
-    fig, (ax_plot, ax_text) = plt.subplots(1, 2, figsize=(13, 6), gridspec_kw={'width_ratios': [1.3, 1.0]})
+    fig, (ax_plot, ax_text) = plt.subplots(1, 2, figsize=(14, 6), gridspec_kw={'width_ratios': [1.3, 1.0]})
 
     import warnings
     warnings.filterwarnings("ignore", category=UserWarning)
@@ -100,14 +100,14 @@ def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename):
         ["MSE (Mean Squared Error)", f"{metrics['mse']:.5f}", "0.00000 (Exact)"],
         ["R² (Determination Coeff)", f"{metrics['r2']:.4f}", "1.0000 (Perfect)"],
         ["MAE (Mean Absolute Error)", f"±{metrics['mae']:.4f}", "0.0000 (Zero error)"],
-        ["Sign Accuracy (Win/Loss)", f"{metrics['sign_acc']:.2f} %", "100.0 % (Exact match)"],
-        ["Extreme Error (|y|>=0.8)", f"±{metrics['extreme_mae']:.4f}", "0.0000 (Checkmate/Blunder)"]
+        ["Sign Accuracy (Win/Loss)", f"{metrics['sign_acc']:.2f}%", "100.0% (Exact match)"],
+        ["Extreme Error (|y|>=0.8)", f"±{metrics['extreme_mae']:.4f}", "0.0000 (Blunder/Mate)"]
     ]
 
-    table = ax_text.table(cellText=table_data, colWidths=[0.48, 0.25, 0.35], cellLoc='center', loc='center')
+    table = ax_text.table(cellText=table_data, colWidths=[0.46, 0.24, 0.30], cellLoc='center', loc='center')
     table.auto_set_font_size(False)
-    table.set_fontsize(11)
-    table.scale(1.0, 2.2)
+    table.set_fontsize(10)
+    table.scale(1.0, 2.1)
 
     for (row, col), cell in table.get_celld().items():
         if row == 0:
@@ -118,7 +118,7 @@ def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename):
             if col == 1:
                 cell.set_text_props(fontweight='bold', color='#1a5276')
 
-    ax_text.text(0.5, 0.90, f"Evaluation Report: {gen_label}", ha='center', va='center', fontsize=15, fontweight='bold', color='#2c3e50')
+    ax_text.text(0.5, 0.90, f"Evaluation Report: {gen_label}", ha='center', va='center', fontsize=14, fontweight='bold', color='#2c3e50')
     ax_text.text(0.5, 0.15,
                  f"• Sample size: {metrics['total_count']} positions (Uniform sampling)\n"
                  f"• Extreme positions (|y|>=0.8): {metrics['extreme_count']} positions\n"
@@ -147,7 +147,7 @@ def main():
         print(f"エラー: モデルまたはデータが見つかりません (model={args.model}, data={args.data})")
         sys.exit(1)
 
-    system_label = "深さ0 Min-Maxなし" if args.system == "depth0" else "深さ2 Min-Maxあり"
+    system_label = "Depth 0, No Min-Max" if args.system == "depth0" else "Depth 2, Min-Max"
     gen_label = f"Gen{args.gen} ({system_label})"
     print(f"自己評価を開始します: {gen_label}")
     dataset = np.load(args.data)
