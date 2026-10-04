@@ -77,14 +77,17 @@ def calculate_metrics(y_true, y_pred):
 def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename):
     fig, (ax_plot, ax_text) = plt.subplots(1, 2, figsize=(13, 6), gridspec_kw={'width_ratios': [1.3, 1.0]})
 
+    import warnings
+    warnings.filterwarnings("ignore", category=UserWarning)
+
     # 散布図
-    ax_plot.scatter(y_true, y_pred, alpha=0.35, color='#1f77b4', edgecolors='none', s=25, label='サンプリング局面')
-    ax_plot.plot([-1.05, 1.05], [-1.05, 1.05], color='#d62728', linestyle='--', linewidth=2, label='理想線 (y = x)')
+    ax_plot.scatter(y_true, y_pred, alpha=0.35, color='#1f77b4', edgecolors='none', s=25, label='Sampled Positions')
+    ax_plot.plot([-1.05, 1.05], [-1.05, 1.05], color='#d62728', linestyle='--', linewidth=2, label='Ideal Line (y = x)')
     ax_plot.set_xlim([-1.05, 1.05])
     ax_plot.set_ylim([-1.05, 1.05])
-    ax_plot.set_xlabel('教師データ正解評価値 (y_true)', fontsize=12, fontweight='bold')
-    ax_plot.set_ylabel('モデル単体推論値 (y_pred)', fontsize=12, fontweight='bold')
-    ax_plot.set_title(f'【{gen_label}】 自己フィッティング散布図', fontsize=14, fontweight='bold', pad=12)
+    ax_plot.set_xlabel('Ground Truth Target Value (y_true)', fontsize=12, fontweight='bold')
+    ax_plot.set_ylabel('Model Direct Predicted Value (y_pred)', fontsize=12, fontweight='bold')
+    ax_plot.set_title(f'[{gen_label}] Self-Fitting Scatter Plot', fontsize=14, fontweight='bold', pad=12)
     ax_plot.grid(True, linestyle=':', alpha=0.6)
     ax_plot.legend(loc='upper left', fontsize=10)
     ax_plot.axhline(0, color='gray', linestyle='-', linewidth=0.8, alpha=0.5)
@@ -93,15 +96,15 @@ def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename):
     # 定量指標表
     ax_text.axis('off')
     table_data = [
-        ["評価指標", "測定値", "理想 / 目標"],
-        ["MSE (平均二乗誤差)", f"{metrics['mse']:.5f}", "0.00000 (完全一致)"],
-        ["R² (決定係数)", f"{metrics['r2']:.4f}", "1.0000 (完全相関)"],
-        ["MAE (平均絶対誤差)", f"±{metrics['mae']:.4f}", "0.0000 (ズレなし)"],
-        ["勝敗方向一致率", f"{metrics['sign_acc']:.2f} %", "100.0 % (符号完全一致)"],
-        ["極値誤差 (|y|≧0.8)", f"±{metrics['extreme_mae']:.4f}", "0.0000 (自滅/詰み認識)"]
+        ["Metric", "Value", "Ideal / Target"],
+        ["MSE (Mean Squared Error)", f"{metrics['mse']:.5f}", "0.00000 (Exact)"],
+        ["R² (Determination Coeff)", f"{metrics['r2']:.4f}", "1.0000 (Perfect)"],
+        ["MAE (Mean Absolute Error)", f"±{metrics['mae']:.4f}", "0.0000 (Zero error)"],
+        ["Sign Accuracy (Win/Loss)", f"{metrics['sign_acc']:.2f} %", "100.0 % (Exact match)"],
+        ["Extreme Error (|y|>=0.8)", f"±{metrics['extreme_mae']:.4f}", "0.0000 (Checkmate/Blunder)"]
     ]
 
-    table = ax_text.table(cellText=table_data, colWidths=[0.45, 0.28, 0.35], cellLoc='center', loc='center')
+    table = ax_text.table(cellText=table_data, colWidths=[0.48, 0.25, 0.35], cellLoc='center', loc='center')
     table.auto_set_font_size(False)
     table.set_fontsize(11)
     table.scale(1.0, 2.2)
@@ -115,11 +118,11 @@ def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename):
             if col == 1:
                 cell.set_text_props(fontweight='bold', color='#1a5276')
 
-    ax_text.text(0.5, 0.90, f"自己評価精度レポート: {gen_label}", ha='center', va='center', fontsize=15, fontweight='bold', color='#2c3e50')
+    ax_text.text(0.5, 0.90, f"Evaluation Report: {gen_label}", ha='center', va='center', fontsize=15, fontweight='bold', color='#2c3e50')
     ax_text.text(0.5, 0.15,
-                 f"・検証サンプル数: {metrics['total_count']} 局面 (一様サンプリング)\n"
-                 f"・極値局面数 (|y|≧0.8): {metrics['extreme_count']} 局面\n"
-                 f"※ モデル推論は深さ0（探索なし単体推論）",
+                 f"• Sample size: {metrics['total_count']} positions (Uniform sampling)\n"
+                 f"• Extreme positions (|y|>=0.8): {metrics['extreme_count']} positions\n"
+                 f"* Note: Model inference evaluated at depth=0 (pure intuition)",
                  ha='center', va='center', fontsize=10, color='#555555',
                  bbox=dict(boxstyle='round,pad=0.6', facecolor='#f4f6f7', edgecolor='#bdc3c7'))
 
