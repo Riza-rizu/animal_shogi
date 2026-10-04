@@ -138,10 +138,21 @@ def main():
     parser.add_argument("--gen", type=int, required=True, help="世代番号 (例: 1, 2, ...)")
     parser.add_argument("--model", type=str, default="animal_shogi_model.keras", help="モデルパス")
     parser.add_argument("--data", type=str, default="train_data.npy", help="教師データパス")
+    parser.add_argument("--archived", action="store_true", help="保存済みフォルダ(experiments/.../genN/)から自動ロードしてその中に再出力")
+    parser.add_argument("--out_dir", type=str, default=None, help="出力先ディレクトリ")
     args = parser.parse_args()
 
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     import tensorflow as tf
+
+    if args.archived:
+        system_dir_name = "depth0_pure_mse" if args.system == "depth0" else "depth2_minmax_mse"
+        archived_dir = os.path.join("experiments", system_dir_name, f"gen{args.gen}")
+        args.model = os.path.join(archived_dir, "model.keras")
+        args.data = os.path.join(archived_dir, "train_data.npy")
+        if args.out_dir is None:
+            args.out_dir = archived_dir
+        print(f"アーカイブ再評価モード: {archived_dir} のデータを参照します")
 
     if not os.path.exists(args.model) or not os.path.exists(args.data):
         print(f"エラー: モデルまたはデータが見つかりません (model={args.model}, data={args.data})")
@@ -167,13 +178,17 @@ def main():
     metrics["generation"] = args.gen
     print(f"  MSE: {metrics['mse']:.5f} | R²: {metrics['r2']:.4f} | MAE: ±{metrics['mae']:.4f} | 符号一致: {metrics['sign_acc']:.1f}%")
 
+    out_dir = args.out_dir or "."
+    os.makedirs(out_dir, exist_ok=True)
+    out_json = os.path.join(out_dir, "metrics.json")
+    out_img = os.path.join(out_dir, "scatter_evaluation.png")
+
     # JSON保存
-    with open("metrics.json", "w", encoding="utf-8") as f:
+    with open(out_json, "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
-    print("  [SAVED] metrics.json")
+    print(f"  [SAVED] {out_json}")
 
     # 散布図画像保存
-    out_img = "scatter_evaluation.png"
     plot_scatter(gen_label, y_sample, y_pred, metrics, out_img)
     print(f"  [SAVED] {out_img}")
 
