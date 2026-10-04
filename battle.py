@@ -32,7 +32,7 @@ from player import ModelPlayer
 from engine import GameEngine
 from constants import PLAYER_1, PLAYER_2, RESULT_DRAW
 
-def play_matchup_worker(worker_id, num_games, m1_path, m2_path, beta, seed):
+def play_matchup_worker(worker_id, num_games, m1_path, m2_path, beta, seed, depth=0):
     import os
     import sys
     import warnings
@@ -42,8 +42,8 @@ def play_matchup_worker(worker_id, num_games, m1_path, m2_path, beta, seed):
     sys.stderr = open(os.devnull, 'w')
 
     np.random.seed(seed)
-    p1 = ModelPlayer(PLAYER_1, model_path_or_model=m1_path, beta=beta)
-    p2 = ModelPlayer(PLAYER_2, model_path_or_model=m2_path, beta=beta)
+    p1 = ModelPlayer(PLAYER_1, model_path_or_model=m1_path, beta=beta, depth=depth)
+    p2 = ModelPlayer(PLAYER_2, model_path_or_model=m2_path, beta=beta, depth=depth)
     players = {PLAYER_1: p1, PLAYER_2: p2}
 
     move_counts = []
@@ -78,9 +78,9 @@ def play_matchup_worker(worker_id, num_games, m1_path, m2_path, beta, seed):
 
     return move_counts, winners
 
-def run_single_series(m1_name, m1_path, m2_name, m2_path, num_games, beta=10.0, num_workers=6):
+def run_single_series(m1_name, m1_path, m2_name, m2_path, num_games, beta=10.0, num_workers=6, depth=0):
     print(f"\n=================================================================")
-    print(f" 対戦開始: [先手] {m1_name} vs [後手] {m2_name} ({num_games} 局)")
+    print(f" 対戦開始: [先手] {m1_name} vs [後手] {m2_name} ({num_games} 局) [depth={depth}]")
     print(f"=================================================================")
     sys.stdout.flush()
 
@@ -99,7 +99,7 @@ def run_single_series(m1_name, m1_path, m2_name, m2_path, num_games, beta=10.0, 
 
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
         futures = [
-            executor.submit(play_matchup_worker, i, n, m1_path, m2_path, beta, np.random.randint(1, 1000000) + i * 31)
+            executor.submit(play_matchup_worker, i, n, m1_path, m2_path, beta, np.random.randint(1, 1000000) + i * 31, depth)
             for i, n in enumerate(task_games)
         ]
         for f in as_completed(futures):
@@ -143,13 +143,13 @@ def run_single_series(m1_name, m1_path, m2_name, m2_path, num_games, beta=10.0, 
         "num_games": num_games
     }
 
-def run_versus_match(m1_name, m1_path, m2_name, m2_path, games_per_side=500, beta=10.0, num_workers=6, save_prefix=""):
+def run_versus_match(m1_name, m1_path, m2_name, m2_path, games_per_side=500, beta=10.0, num_workers=6, save_prefix="", depth=0):
     print(f"\n#################################################################")
-    print(f" 【世代対決】 {m1_name} vs {m2_name} (先後各{games_per_side}局 / 計{games_per_side*2}局)")
+    print(f" 【世代対決】 {m1_name} vs {m2_name} (先後各{games_per_side}局 / 計{games_per_side*2}局) [depth={depth}]")
     print(f"#################################################################")
 
-    res_A = run_single_series(m1_name, m1_path, m2_name, m2_path, games_per_side, beta, num_workers)
-    res_B = run_single_series(m2_name, m2_path, m1_name, m1_path, games_per_side, beta, num_workers)
+    res_A = run_single_series(m1_name, m1_path, m2_name, m2_path, games_per_side, beta, num_workers, depth=depth)
+    res_B = run_single_series(m2_name, m2_path, m1_name, m1_path, games_per_side, beta, num_workers, depth=depth)
 
     total_m1_wins = res_A["p1_wins"] + res_B["p2_wins"]
     total_m2_wins = res_A["p2_wins"] + res_B["p1_wins"]
@@ -312,6 +312,8 @@ def main():
     parser.add_argument("--self_name", type=str, default="Model", help="自己対戦モデル名称")
     parser.add_argument("--games", type=int, default=500, help="対局数 (別モデル時は先後各500局、自己対戦時は1000局)")
     parser.add_argument("--beta", type=float, default=10.0, help="逆温度 beta")
+    parser.add_argument("--depth", type=int, default=0, help="探索深さ (0: Min-Maxなし直接推論, 2: 深さ2 Min-Max探索)")
+    parser.add_argument("--save_prefix", type=str, default="", help="出力サマリーテキストのプレフィックス")
     parser.add_argument("--workers", type=int, default=min(multiprocessing.cpu_count(), 6), help="並列プロセス数")
     args = parser.parse_args()
 
@@ -451,7 +453,7 @@ def main():
     elif args.self_path:
         run_self_match(args.self_name, args.self_path, num_games=args.games if args.games != 500 else 1000, beta=args.beta, num_workers=args.workers)
     elif args.m1 and args.m2:
-        run_versus_match(args.name1, args.m1, args.name2, args.m2, games_per_side=args.games, beta=args.beta, num_workers=args.workers)
+        run_versus_match(args.name1, args.m1, args.name2, args.m2, games_per_side=args.games, beta=args.beta, num_workers=args.workers, save_prefix=args.save_prefix, depth=args.depth)
     else:
         parser.print_help()
 
