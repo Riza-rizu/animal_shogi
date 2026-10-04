@@ -110,17 +110,19 @@ def load_keras_model_safe(model_path):
 
 
 class ModelPlayer:
-    def __init__(self, player_id, model_path_or_model="animal_shogi_model.keras", beta=10.0):
+    def __init__(self, player_id, model_path_or_model="animal_shogi_model.keras", beta=10.0, depth=2):
         """
-        深さ2のMin-Max探索とニューラルネットワークモデルを併用するAIプレイヤー。
+        AIプレイヤー。
         
         Args:
             player_id: プレイヤーのID（PLAYER_1 または PLAYER_2）
             model_path_or_model: 学習済みモデルのパス（str）またはロード済みのモデルオブジェクト
             beta: 逆温度パラメータ（デフォルト: 10.0）
+            depth: 探索深さ（0: Min-Maxなし直接推論, 2: 深さ2 Min-Max探索）
         """
         self.player_id = player_id
         self.beta = beta
+        self.depth = depth
         
         # TensorFlow の起動ログ出力を抑制
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -160,7 +162,7 @@ class ModelPlayer:
 
     def choose_move(self, board, legal_moves):
         """
-        深さ2のMin-Max探索により、相手の反撃を織り込んだ勝率評価値で手を選択する
+        手を選択する（depth=0: 直接推論, depth=2: 深さ2 Min-Max探索）
         """
         if not legal_moves:
             return None
@@ -169,6 +171,36 @@ class ModelPlayer:
 
         opponent_id = 3 - self.player_id
         evals = self.np.zeros(len(legal_moves), dtype=self.np.float32)
+
+        # --- 深さ0（Min-Maxなし：直接推論） ---
+        if self.depth == 0:
+            states_to_eval = []
+            for m_idx, move in enumerate(legal_moves):
+                next_board = board.copy()
+                GameEngine.make_move(next_board, move, self.player_id)
+                winner = GameEngine.check_winner(next_board)
+                if winner == self.player_id:
+                    evals[m_idx] = self.win_val
+                else:
+                    # 自分の手を指した後の盤面（自分視点ベクトル）
+                    state_vec = state2vec(next_board, self.player_id)
+                    states_to_eval.append((m_idx, state_vec))
+
+            if states_to_eval:
+                batch_array = self.np.array([s[1] for s in states_to_eval], dtype=self.np.float32)
+                preds = self.model(batch_array, training=False).numpy().flatten()
+                for (m_idx, _), pred in zip(states_to_eval, preds):
+                    evals[m_idx] = float(pred)
+
+            # ソフトマックスで選択
+            best_idx = int(self.np.argmax(evals))
+            shifted = evals - evals[best_idx]
+            exp_vals = self.np.exp(self.beta * shifted)
+            probs = exp_vals / self.np.sum(exp_vals)
+            choice_idx = self.np.random.choice(len(legal_moves), p=probs)
+            return legal_moves[choice_idx]
+
+        # --- 深さ2（Min-Max探索：相手の応手を展開） ---
 
         # 探索用のデータコンテナ
         eval_determined = {}

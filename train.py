@@ -3,6 +3,7 @@
 """
 
 import os
+import json
 import numpy as np
 from tensorflow import keras
 
@@ -89,6 +90,17 @@ def main():
     # 4. 保存
     model.save(model_filename)
     print(f"モデルを保存しました: {model_filename}")
+    
+    # 5. 学習履歴ログの保存 (training_history.json)
+    history_dict = {
+        "epochs": epochs,
+        "batch_size": batch_size,
+        "loss": [float(v) for v in history.history.get("loss", [])],
+        "mae": [float(v) for v in history.history.get("mae", [])]
+    }
+    with open("training_history.json", "w", encoding="utf-8") as f:
+        json.dump(history_dict, f, indent=2)
+    print("学習履歴を保存しました: training_history.json")
 
 if __name__ == "__main__":
     import sys

@@ -11,6 +11,9 @@ import pickle
 import numpy as np
 import shutil
 import random
+import json
+import csv
+import argparse
 
 # 古いデータの影響力を落とす減衰率 (0.0 〜 1.0)
 DECAY_FACTOR = 0.80
@@ -19,6 +22,10 @@ ARCHIVE_DIR = "processed_pkl"
 MAX_SAMPLES_PER_BIN = 3000  # 各ビン（0.1刻み）あたりの最大サンプリング数 (合計最大30,000件)
 
 def main():
+    parser = argparse.ArgumentParser(description="対局ログのマージと学習データセット作成")
+    parser.add_argument("--gen", type=int, default=None, help="現在作成中の目標世代番号（例: Gen4モデルを作成中なら --gen 4）")
+    args = parser.parse_args()
+
     # ディレクトリ内の output*.pkl ファイルを取得
     pkl_files = glob.glob("output*.pkl")
     
@@ -150,6 +157,83 @@ def main():
                 os.remove(dest_path)
             shutil.move(filepath, dest_path)
         print(f"マージ済みの対戦ログ {len(pkl_files)} 件を {ARCHIVE_DIR}/ フォルダに退避しました。")
+
+    # =========================================================
+    # 対局ログ（match_log_*.pkl）の集計とCSV/JSON出力
+    # =========================================================
+    match_log_files = sorted(glob.glob("match_log_*.pkl"))
+    if match_log_files:
+        print("\n対局ログをマージしています...")
+        all_records = []
+        for mf in match_log_files:
+            try:
+                with open(mf, 'rb') as f:
+                    records = pickle.load(f)
+                    all_records.extend(records)
+            except Exception as e:
+                print(f"警告: {mf} の読み込みに失敗しました: {e}")
+
+        if all_records:
+            total_games = len(all_records)
+            p1_wins = sum(1 for r in all_records if r['winner'] == 1)
+            p2_wins = sum(1 for r in all_records if r['winner'] == 2)
+            draws = sum(1 for r in all_records if r['winner'] not in (1, 2))
+            short_games = sum(1 for r in all_records if r.get('is_short_game', False))
+            avg_moves = float(np.mean([r['moves'] for r in all_records])) if total_games > 0 else 0.0
+
+            player_gen = (args.gen - 1) if args.gen is not None else None
+            match_stats = {
+                "player_generation": f"Gen{player_gen}" if player_gen is not None else "Unknown",
+                "created_model_generation": f"Gen{args.gen}" if args.gen is not None else "Unknown",
+                "total_games": total_games,
+                "p1_wins": p1_wins,
+                "p1_win_rate": round(p1_wins / total_games * 100.0, 2) if total_games > 0 else 0.0,
+                "p2_wins": p2_wins,
+                "p2_win_rate": round(p2_wins / total_games * 100.0, 2) if total_games > 0 else 0.0,
+                "draws": draws,
+                "draw_rate": round(draws / total_games * 100.0, 2) if total_games > 0 else 0.0,
+                "avg_moves": round(avg_moves, 2),
+                "short_games_3_to_6": short_games,
+                "short_game_rate": round(short_games / total_games * 100.0, 2) if total_games > 0 else 0.0
+            }
+
+            # match_stats.json 保存
+            stats_filename = "match_stats.json"
+            with open(stats_filename, 'w', encoding='utf-8') as f:
+                json.dump(match_stats, f, ensure_ascii=False, indent=2)
+            if player_gen is not None:
+                gen_stats_filename = f"match_stats_gen{player_gen}.json"
+                with open(gen_stats_filename, 'w', encoding='utf-8') as f:
+                    json.dump(match_stats, f, ensure_ascii=False, indent=2)
+                print(f"対局統計サマリーを保存しました: {stats_filename} / {gen_stats_filename}")
+            else:
+                print(f"対局統計サマリーを保存しました: {stats_filename}")
+            print(f"  - 総対戦数: {total_games}, 先手勝率: {match_stats['p1_win_rate']}%, 後手勝率: {match_stats['p2_win_rate']}%, 千日手率: {match_stats['draw_rate']}%, 平均手数: {match_stats['avg_moves']}, 即死(3-6手): {short_games}局")
+
+            # match_log_15000games.csv 保存
+            csv_filename = "match_log_15000games.csv"
+            with open(csv_filename, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                header = ["game_id", "winner", "moves", "is_short_game"] + [f"move_{i+1}" for i in range(10)]
+                writer.writerow(header)
+                for idx, r in enumerate(all_records):
+                    m10 = r.get('moves_10', [])
+                    row = [idx + 1, r['winner'], r['moves'], r.get('is_short_game', False)]
+                    row.extend(m10 + [""] * (10 - len(m10)))
+                    writer.writerow(row)
+            if player_gen is not None:
+                gen_csv_filename = f"match_log_15000games_gen{player_gen}.csv"
+                shutil.copy2(csv_filename, gen_csv_filename)
+                print(f"全対局CSVを保存しました: {csv_filename} / {gen_csv_filename}")
+            else:
+                print(f"全対局CSVを保存しました: {csv_filename}")
+
+            # アーカイブ移動
+            for mf in match_log_files:
+                dest_path = os.path.join(ARCHIVE_DIR, os.path.basename(mf))
+                if os.path.exists(dest_path):
+                    os.remove(dest_path)
+                shutil.move(mf, dest_path)
 
     print("-" * 50)
     print("make_dataset.py の処理が正常に完了しました。")

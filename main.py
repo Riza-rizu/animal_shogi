@@ -43,6 +43,7 @@ def run_simulation(yaml_path):
     p2_type = config.get('p2', 'random')
     model_path = config.get('model_path', 'animal_shogi_model.keras')
     beta = config.get('beta', 10.0)
+    depth = config.get('depth', 2)
     
     # 乱数シードの設定
     import random
@@ -66,6 +67,7 @@ def run_simulation(yaml_path):
     
     # 既存データのロード
     data_dict = {}
+    match_records = []
     if os.path.exists(output_filename):
         try:
             with open(output_filename, 'rb') as f:
@@ -84,12 +86,12 @@ def run_simulation(yaml_path):
         
         # プレイヤーの作成
         if p1_type == 'ai':
-            player1 = ModelPlayer(PLAYER_1, model_path_or_model=model, beta=beta)
+            player1 = ModelPlayer(PLAYER_1, model_path_or_model=model, beta=beta, depth=depth)
         else:
             player1 = RandomPlayer(PLAYER_1)
             
         if p2_type == 'ai':
-            player2 = ModelPlayer(PLAYER_2, model_path_or_model=model, beta=beta)
+            player2 = ModelPlayer(PLAYER_2, model_path_or_model=model, beta=beta, depth=depth)
         else:
             player2 = RandomPlayer(PLAYER_2)
             
@@ -103,6 +105,9 @@ def run_simulation(yaml_path):
         max_moves = 200
         winner = None
         
+        # 1試合の手順履歴（定跡分析用）
+        game_moves = []
+        
         for move_count in range(max_moves):
             # 現時点の状態ベクトルを記録
             state_vec = state2vec(board, current_player_id)
@@ -115,6 +120,7 @@ def run_simulation(yaml_path):
                 break
                 
             selected_move = players[current_player_id].choose_move(board, legal_moves)
+            game_moves.append(str(selected_move))
             GameEngine.make_move(board, selected_move, current_player_id)
             
             # 勝敗判定
@@ -127,9 +133,18 @@ def run_simulation(yaml_path):
             # 200手を超えたら引き分け
             winner = RESULT_DRAW
             
+        # 対局サマリー記録
+        num_moves = len(history)
+        match_records.append({
+            'game_id': g + 1,
+            'winner': winner,
+            'moves': num_moves,
+            'is_short_game': (num_moves <= 6 and winner != RESULT_DRAW),
+            'moves_10': game_moves[:10]
+        })
+            
         # 評価値の計算とデータ蓄積（割引率 alpha を適用）
         # 終局に近い手ほど勝敗への影響が大きく、初期に近い手ほど小さくなるように割引く
-        num_moves = len(history)
         for i, (state_vec, player_id) in enumerate(history):
             state_key = tuple(state_vec.tolist())
             
@@ -156,6 +171,12 @@ def run_simulation(yaml_path):
     print(f"データをファイルに書き込んでいます: {output_filename} ...")
     with open(output_filename, 'wb') as f:
         pickle.dump(data_dict, f)
+        
+    # 対局ログファイルの保存
+    match_log_filename = f"match_log_{seed:03d}.pkl"
+    print(f"対局ログを書き込んでいます: {match_log_filename} ...")
+    with open(match_log_filename, 'wb') as f:
+        pickle.dump(match_records, f)
     print("シミュレーションおよびファイルの保存が完了しました。")
 
 def main():
