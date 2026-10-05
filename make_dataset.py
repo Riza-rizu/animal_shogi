@@ -24,6 +24,7 @@ MAX_SAMPLES_PER_BIN = 3000  # 各ビン（0.1刻み）あたりの最大サン�
 def main():
     parser = argparse.ArgumentParser(description="対局ログのマージと学習データセット作成")
     parser.add_argument("--gen", type=int, default=None, help="現在作成中の目標世代番号（例: Gen4モデルを作成中なら --gen 4）")
+    parser.add_argument("--balance", action="store_true", help="0.1刻みビン分割バランシングを行う（軽量実験用）")
     args = parser.parse_args()
 
     # ディレクトリ内の output*.pkl ファイルを取得
@@ -98,49 +99,53 @@ def main():
     # =========================================================
     # 0.1刻みの勝率ビンによるデータバランシング（サンプリング）
     # =========================================================
-    print("\n--- データバランシング (0.1刻みビン分割サンプリング) を開始 ---")
-    
-    # 10個のビンを準備 (0: [0.0, 0.1), 1: [0.1, 0.2), ..., 9: [0.9, 1.0])
-    # 各ビンには (state_key, win_rate) を格納
-    bins = [[] for _ in range(10)]
-    
-    for state_key, (count, mean_val) in cumulative_data.items():
-        # mean_val (-1.0〜1.0) を元にビンインデックス (0〜9) を決定
-        win_rate = (mean_val + 1.0) / 2.0
-        win_rate = np.clip(win_rate, 0.0, 1.0)
-        bin_idx = min(int(win_rate * 10), 9)
-        # 評価値は元の連続値 (-1.0〜1.0) をそのまま保持
-        bins[bin_idx].append((state_key, float(mean_val)))
+    # 学習用 NumPy 配列 (train_data.npy) の生成
+    # =========================================================
+    if args.balance:
+        print("\n--- データバランシング (0.1刻みビン分割サンプリング) を開始 ---")
+        bins = [[] for _ in range(10)]
+        for state_key, (count, mean_val) in cumulative_data.items():
+            win_rate = (mean_val + 1.0) / 2.0
+            win_rate = np.clip(win_rate, 0.0, 1.0)
+            bin_idx = min(int(win_rate * 10), 9)
+            bins[bin_idx].append((state_key, float(mean_val)))
 
-    sampled_dataset = []
-    print(f"各ビンの登録局面数とサンプリング数 (上限: {MAX_SAMPLES_PER_BIN}件):")
-    
-    for b_idx in range(10):
-        low = b_idx * 0.1
-        high = (b_idx + 1) * 0.1
-        total_in_bin = len(bins[b_idx])
-        
-        if total_in_bin <= MAX_SAMPLES_PER_BIN:
-            selected = bins[b_idx]
-        else:
-            # 上限を超える場合はランダムにサンプリング（アンダーサンプリング）
-            selected = random.sample(bins[b_idx], MAX_SAMPLES_PER_BIN)
-            
-        sampled_dataset.extend(selected)
-        print(f"  Bin {b_idx} [{low:.1f} - {high:.1f}]: {total_in_bin:6d} 局面中 -> {len(selected):4d} 局面を採択")
+        sampled_dataset = []
+        print(f"各ビンの登録局面数とサンプリング数 (上限: {MAX_SAMPLES_PER_BIN}件):")
+        for b_idx in range(10):
+            low = b_idx * 0.1
+            high = (b_idx + 1) * 0.1
+            total_in_bin = len(bins[b_idx])
+            if total_in_bin <= MAX_SAMPLES_PER_BIN:
+                selected = bins[b_idx]
+            else:
+                selected = random.sample(bins[b_idx], MAX_SAMPLES_PER_BIN)
+            sampled_dataset.extend(selected)
+            print(f"  Bin {b_idx} [{low:.1f} - {high:.1f}]: {total_in_bin:6d} 局面中 -> {len(selected):4d} 局面を採択")
 
-    print(f"\n合計サンプリング局面数: {len(sampled_dataset)} 局面")
-
-    # サンプルをシャッフル
-    random.shuffle(sampled_dataset)
-
-    # 学習用 NumPy 配列 (train_data.npy) の作成 (139列目は -1.0〜1.0 の連続値)
-    num_items = len(sampled_dataset)
-    dataset_array = np.empty((num_items, 140), dtype=np.float32)
-
-    for idx, (state_key, val) in enumerate(sampled_dataset):
-        dataset_array[idx, :139] = list(state_key)
-        dataset_array[idx, 139] = val
+        print(f"\n合計サンプリング局面数: {len(sampled_dataset)} 局面")
+        random.shuffle(sampled_dataset)
+        num_items = len(sampled_dataset)
+        dataset_array = np.empty((num_items, 140), dtype=np.float32)
+        for idx, (state_key, val) in enumerate(sampled_dataset):
+            dataset_array[idx, :139] = list(state_key)
+            dataset_array[idx, 139] = val
+    else:
+        print("\n--- 全局面データセットの生成 (過去の100万局・全件学習仕様) ---")
+        num_items = len(cumulative_data)
+        dataset_array = np.empty((num_items, 140), dtype=np.float32)
+        keys = list(cumulative_data.keys())
+        for idx, state_key in enumerate(keys):
+            count, mean_val = cumulative_data.pop(state_key)
+            state_vec = list(state_key)
+            # 符号付き平方根（p=0.5）でスケーリングして0付近を引き伸ばす
+            scaled_val = np.sign(mean_val) * (np.abs(mean_val) ** 0.5)
+            dataset_array[idx, :139] = state_vec
+            dataset_array[idx, 139] = scaled_val
+            if (idx + 1) % 1000000 == 0:
+                print(f"  - 配列化進行状況: {idx + 1} / {num_items} 局面完了")
+        del keys
+        del cumulative_data
 
     output_filename = "train_data.npy"
     np.save(output_filename, dataset_array)
