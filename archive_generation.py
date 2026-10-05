@@ -66,7 +66,8 @@ def main():
         ([f"match_stats_gen{player_gen}.json", "match_stats.json"], f"match_stats_gen{player_gen}.json"),
         (["scatter_evaluation.png"], "scatter_evaluation.png"),
         (["metrics.json"], "metrics.json"),
-        (["training_history.json"], "training_history.json")
+        (["training_history.json"], "training_history.json"),
+        (["current_gen_data.npy"], "current_gen_data.npy")
     ]
 
     copied_count = 0

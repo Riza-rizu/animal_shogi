@@ -96,6 +96,20 @@ def main():
         with open(CUMULATIVE_FILE, 'wb') as f:
             pickle.dump(cumulative_data, f)
 
+        # 今回の対局結果 S_n(x) [α=1] の生データセット配列を保存
+        print("最新世代の対局評価値 S_n(x) [α=1] を配列化しています...")
+        num_new = len(new_data)
+        current_data_array = np.empty((num_new, 140), dtype=np.float32)
+        for idx, (state_key, new_vals) in enumerate(new_data.items()):
+            new_mean = float(np.mean(new_vals))
+            scaled_sn = np.sign(new_mean) * (np.abs(new_mean) ** 0.5)
+            current_data_array[idx, :139] = list(state_key)
+            current_data_array[idx, 139] = scaled_sn
+
+        current_data_filename = "current_gen_data.npy"
+        np.save(current_data_filename, current_data_array)
+        print(f"最新対局結果データ (S_n(x), α=1) を保存しました: {current_data_filename} (Shape: {current_data_array.shape})")
+
     # =========================================================
     # 0.1刻みの勝率ビンによるデータバランシング（サンプリング）
     # =========================================================

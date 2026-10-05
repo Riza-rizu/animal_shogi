@@ -74,7 +74,7 @@ def calculate_metrics(y_true, y_pred):
     }
 
 
-def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename):
+def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename, is_sn=False):
     fig, (ax_plot, ax_text) = plt.subplots(1, 2, figsize=(14, 6), gridspec_kw={'width_ratios': [1.3, 1.0]})
 
     import warnings
@@ -85,9 +85,16 @@ def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename):
     ax_plot.plot([-1.05, 1.05], [-1.05, 1.05], color='#d62728', linestyle='--', linewidth=2, label='Ideal Line (y = x)')
     ax_plot.set_xlim([-1.05, 1.05])
     ax_plot.set_ylim([-1.05, 1.05])
-    ax_plot.set_xlabel('Ground Truth Target Value (y_true)', fontsize=12, fontweight='bold')
-    ax_plot.set_ylabel('Model Direct Predicted Value (y_pred)', fontsize=12, fontweight='bold')
-    ax_plot.set_title(f'[{gen_label}] Self-Fitting Scatter Plot', fontsize=14, fontweight='bold', pad=12)
+    
+    if is_sn:
+        ax_plot.set_xlabel('Current Generation Match Value S_n(x) [α=1.0]', fontsize=12, fontweight='bold')
+        ax_plot.set_ylabel('Model Direct Predicted Value (y_pred)', fontsize=12, fontweight='bold')
+        ax_plot.set_title(f'[{gen_label}] Match Fitting: S_n(x) vs Model Prediction (α=1)', fontsize=13, fontweight='bold', pad=12)
+    else:
+        ax_plot.set_xlabel('Ground Truth Target Value (y_true)', fontsize=12, fontweight='bold')
+        ax_plot.set_ylabel('Model Direct Predicted Value (y_pred)', fontsize=12, fontweight='bold')
+        ax_plot.set_title(f'[{gen_label}] Self-Fitting Scatter Plot', fontsize=14, fontweight='bold', pad=12)
+
     ax_plot.grid(True, linestyle=':', alpha=0.6)
     ax_plot.legend(loc='upper left', fontsize=10)
     ax_plot.axhline(0, color='gray', linestyle='-', linewidth=0.8, alpha=0.5)
@@ -118,11 +125,20 @@ def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename):
             if col == 1:
                 cell.set_text_props(fontweight='bold', color='#1a5276')
 
-    ax_text.text(0.5, 0.90, f"Evaluation Report: {gen_label}", ha='center', va='center', fontsize=14, fontweight='bold', color='#2c3e50')
-    ax_text.text(0.5, 0.15,
-                 f"• Sample size: {metrics['total_count']} positions (Uniform sampling)\n"
-                 f"• Extreme positions (|y|>=0.8): {metrics['extreme_count']} positions\n"
-                 f"* Note: Model inference evaluated at depth=0 (pure intuition)",
+    report_title = f"Evaluation Report: {gen_label}" + (" [S_n(x), α=1]" if is_sn else "")
+    ax_text.text(0.5, 0.90, report_title, ha='center', va='center', fontsize=14, fontweight='bold', color='#2c3e50')
+    
+    note_text = (
+        f"• Ground truth: Pure current-generation self-play matches (S_n(x), α=1.0)\n"
+        f"• Sample size: {metrics['total_count']} positions | Extreme (|y|>=0.8): {metrics['extreme_count']}\n"
+        f"* Historical carryover excluded to verify genuine new learning"
+    ) if is_sn else (
+        f"• Sample size: {metrics['total_count']} positions (Uniform sampling)\n"
+        f"• Extreme positions (|y|>=0.8): {metrics['extreme_count']} positions\n"
+        f"* Note: Model inference evaluated at depth=0 (pure intuition)"
+    )
+
+    ax_text.text(0.5, 0.15, note_text,
                  ha='center', va='center', fontsize=10, color='#555555',
                  bbox=dict(boxstyle='round,pad=0.6', facecolor='#f4f6f7', edgecolor='#bdc3c7'))
 
@@ -137,7 +153,7 @@ def main():
                         help="実験系統: depth0 (深さ0) または depth2 (深さ2 Min-Max)")
     parser.add_argument("--gen", type=int, required=True, help="世代番号 (例: 1, 2, ...)")
     parser.add_argument("--model", type=str, default="animal_shogi_model.keras", help="モデルパス")
-    parser.add_argument("--data", type=str, default="train_data.npy", help="教師データパス")
+    parser.add_argument("--data", type=str, default=None, help="教師データパス (未指定時は current_gen_data.npy 優先)")
     parser.add_argument("--archived", action="store_true", help="保存済みフォルダ(experiments/.../genN/)から自動ロードしてその中に再出力")
     parser.add_argument("--out_dir", type=str, default=None, help="出力先ディレクトリ")
     args = parser.parse_args()
@@ -145,14 +161,30 @@ def main():
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     import tensorflow as tf
 
+    is_sn = False
     if args.archived:
         system_dir_name = "depth0_pure_mse" if args.system == "depth0" else "depth2_minmax_mse"
         archived_dir = os.path.join("experiments", system_dir_name, f"gen{args.gen}")
         args.model = os.path.join(archived_dir, "model.keras")
-        args.data = os.path.join(archived_dir, "train_data.npy")
+        sn_path = os.path.join(archived_dir, "current_gen_data.npy")
+        if (args.data is None or "current_gen_data" in args.data) and os.path.exists(sn_path):
+            args.data = sn_path
+            is_sn = True
+        elif args.data is None:
+            args.data = os.path.join(archived_dir, "train_data.npy")
         if args.out_dir is None:
             args.out_dir = archived_dir
-        print(f"アーカイブ再評価モード: {archived_dir} のデータを参照します")
+        print(f"アーカイブ再評価モード: {archived_dir} のデータを参照します (データ: {os.path.basename(args.data)})")
+    else:
+        # 未指定の場合、最新対局結果 S_n(x) [α=1] を優先
+        if args.data is None:
+            if os.path.exists("current_gen_data.npy"):
+                args.data = "current_gen_data.npy"
+                is_sn = True
+            else:
+                args.data = "train_data.npy"
+        elif "current_gen_data" in args.data:
+            is_sn = True
 
     if not os.path.exists(args.model) or not os.path.exists(args.data):
         print(f"エラー: モデルまたはデータが見つかりません (model={args.model}, data={args.data})")
@@ -160,7 +192,8 @@ def main():
 
     system_label = "Depth 0, No Min-Max" if args.system == "depth0" else "Depth 2, Min-Max"
     gen_label = f"Gen{args.gen} ({system_label})"
-    print(f"自己評価を開始します: {gen_label}")
+    mode_str = "S_n(x) [α=1.0: 最新対局のみ]" if is_sn else "Y_n(x) [累計DB]"
+    print(f"自己評価を開始します: {gen_label} (評価対象: {mode_str})")
     dataset = np.load(args.data)
     X_all = dataset[:, :139].astype(np.float32)
     y_all = dataset[:, 139].astype(np.float32)
@@ -176,6 +209,7 @@ def main():
     metrics = calculate_metrics(y_sample, y_pred)
     metrics["system"] = args.system
     metrics["generation"] = args.gen
+    metrics["is_sn_alpha1"] = is_sn
     print(f"  MSE: {metrics['mse']:.5f} | R²: {metrics['r2']:.4f} | MAE: ±{metrics['mae']:.4f} | 符号一致: {metrics['sign_acc']:.1f}%")
 
     out_dir = args.out_dir or "."
@@ -188,8 +222,8 @@ def main():
         json.dump(metrics, f, indent=2)
     print(f"  [SAVED] {out_json}")
 
-    # 散布図画像保存
-    plot_scatter(gen_label, y_sample, y_pred, metrics, out_img)
+    # 散布図描画
+    plot_scatter(gen_label, y_sample, y_pred, metrics, out_img, is_sn=is_sn)
     print(f"  [SAVED] {out_img}")
 
 
