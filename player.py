@@ -172,7 +172,7 @@ class ModelPlayer:
         opponent_id = 3 - self.player_id
         evals = self.np.zeros(len(legal_moves), dtype=self.np.float32)
 
-        # --- 深さ0（Min-Maxなし：直接推論） ---
+        # --- 深さ0（Min-Maxなし：直接推論 / 過去の元祖コードと完全一致） ---
         if self.depth == 0:
             states_to_eval = []
             for m_idx, move in enumerate(legal_moves):
@@ -182,15 +182,19 @@ class ModelPlayer:
                 if winner == self.player_id:
                     evals[m_idx] = self.win_val
                 else:
-                    # 自分の手を指した後の盤面（自分視点ベクトル）
-                    state_vec = state2vec(next_board, self.player_id)
+                    # 遷移先の状態ベクトルを相手手番として取得
+                    opponent_id = 3 - self.player_id
+                    state_vec = state2vec(next_board, opponent_id)
                     states_to_eval.append((m_idx, state_vec))
 
             if states_to_eval:
                 batch_array = self.np.array([s[1] for s in states_to_eval], dtype=self.np.float32)
                 preds = self.model(batch_array, training=False).numpy().flatten()
                 for (m_idx, _), pred in zip(states_to_eval, preds):
-                    evals[m_idx] = float(pred)
+                    if self.is_tanh:
+                        evals[m_idx] = -float(pred)
+                    else:
+                        evals[m_idx] = 1.0 - float(pred)
 
             # ソフトマックスで選択
             best_idx = int(self.np.argmax(evals))
