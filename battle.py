@@ -32,7 +32,7 @@ from player import ModelPlayer
 from engine import GameEngine
 from constants import PLAYER_1, PLAYER_2, RESULT_DRAW
 
-def play_matchup_worker(worker_id, num_games, m1_path, m2_path, beta, seed, depth=0):
+def play_matchup_worker(worker_id, num_games, m1_path, m2_path, beta, seed, depth1=0, depth2=0):
     import os
     import sys
     import warnings
@@ -42,8 +42,8 @@ def play_matchup_worker(worker_id, num_games, m1_path, m2_path, beta, seed, dept
     sys.stderr = open(os.devnull, 'w')
 
     np.random.seed(seed)
-    p1 = ModelPlayer(PLAYER_1, model_path_or_model=m1_path, beta=beta, depth=depth)
-    p2 = ModelPlayer(PLAYER_2, model_path_or_model=m2_path, beta=beta, depth=depth)
+    p1 = ModelPlayer(PLAYER_1, model_path_or_model=m1_path, beta=beta, depth=depth1)
+    p2 = ModelPlayer(PLAYER_2, model_path_or_model=m2_path, beta=beta, depth=depth2)
     players = {PLAYER_1: p1, PLAYER_2: p2}
 
     move_counts = []
@@ -78,9 +78,9 @@ def play_matchup_worker(worker_id, num_games, m1_path, m2_path, beta, seed, dept
 
     return move_counts, winners
 
-def run_single_series(m1_name, m1_path, m2_name, m2_path, num_games, beta=10.0, num_workers=6, depth=0):
+def run_single_series(m1_name, m1_path, m2_name, m2_path, num_games, beta=10.0, num_workers=6, depth1=0, depth2=0):
     print(f"\n=================================================================")
-    print(f" 対戦開始: [先手] {m1_name} vs [後手] {m2_name} ({num_games} 局) [depth={depth}]")
+    print(f" 対戦開始: [先手] {m1_name} (depth={depth1}) vs [後手] {m2_name} (depth={depth2}) ({num_games} 局)")
     print(f"=================================================================")
     sys.stdout.flush()
 
@@ -99,7 +99,7 @@ def run_single_series(m1_name, m1_path, m2_name, m2_path, num_games, beta=10.0, 
 
     with ProcessPoolExecutor(max_workers=num_workers) as executor:
         futures = [
-            executor.submit(play_matchup_worker, i, n, m1_path, m2_path, beta, np.random.randint(1, 1000000) + i * 31, depth)
+            executor.submit(play_matchup_worker, i, n, m1_path, m2_path, beta, np.random.randint(1, 1000000) + i * 31, depth1, depth2)
             for i, n in enumerate(task_games)
         ]
         for f in as_completed(futures):
@@ -143,13 +143,17 @@ def run_single_series(m1_name, m1_path, m2_name, m2_path, num_games, beta=10.0, 
         "num_games": num_games
     }
 
-def run_versus_match(m1_name, m1_path, m2_name, m2_path, games_per_side=500, beta=10.0, num_workers=6, save_prefix="", depth=0):
+def run_versus_match(m1_name, m1_path, m2_name, m2_path, games_per_side=500, beta=10.0, num_workers=6, save_prefix="", depth=None, depth1=0, depth2=0):
+    if depth is not None:
+        depth1 = depth
+        depth2 = depth
+
     print(f"\n#################################################################")
-    print(f" 【世代対決】 {m1_name} vs {m2_name} (先後各{games_per_side}局 / 計{games_per_side*2}局) [depth={depth}]")
+    print(f" 【世代対決】 {m1_name} (depth={depth1}) vs {m2_name} (depth={depth2}) (先後各{games_per_side}局 / 計{games_per_side*2}局)")
     print(f"#################################################################")
 
-    res_A = run_single_series(m1_name, m1_path, m2_name, m2_path, games_per_side, beta, num_workers, depth=depth)
-    res_B = run_single_series(m2_name, m2_path, m1_name, m1_path, games_per_side, beta, num_workers, depth=depth)
+    res_A = run_single_series(m1_name, m1_path, m2_name, m2_path, games_per_side, beta, num_workers, depth1=depth1, depth2=depth2)
+    res_B = run_single_series(m2_name, m2_path, m1_name, m1_path, games_per_side, beta, num_workers, depth1=depth2, depth2=depth1)
 
     total_m1_wins = res_A["p1_wins"] + res_B["p2_wins"]
     total_m2_wins = res_A["p2_wins"] + res_B["p1_wins"]
@@ -190,6 +194,8 @@ def run_versus_match(m1_name, m1_path, m2_name, m2_path, games_per_side=500, bet
                  対戦結果: {m1_name} vs {m2_name} 総合勝敗表
 =================================================================================
 【対戦条件】先後入れ替え 各 {games_per_side} 局 (計 {total_games} 局) / beta = {beta}
+  * {m1_name}: depth = {depth1}
+  * {m2_name}: depth = {depth2}
 
 (A) 先手:{m1_name} vs 後手:{m2_name} ({games_per_side} 局)
     {m1_name}(先手) 勝利 : {res_A['p1_wins']:4d} 局 ({res_A['p1_wins']/games_per_side*100:5.1f}%)
@@ -240,12 +246,12 @@ def run_versus_match(m1_name, m1_path, m2_name, m2_path, games_per_side=500, bet
         f.write(summary_text)
     print(f"[保存完了] 勝敗表テキスト: {fpath}")
 
-def run_self_match(m_name, m_path, num_games=1000, beta=10.0, num_workers=6, save_prefix=""):
+def run_self_match(m_name, m_path, num_games=1000, beta=10.0, num_workers=6, save_prefix="", depth=0):
     print(f"\n#################################################################")
-    print(f" 【単独評価】 {m_name} 同士の自己対局 ({num_games} 局)")
+    print(f" 【単独評価】 {m_name} 同士の自己対局 ({num_games} 局) [depth={depth}]")
     print(f"#################################################################")
 
-    res = run_single_series(m_name, m_path, m_name, m_path, num_games, beta, num_workers)
+    res = run_single_series(m_name, m_path, m_name, m_path, num_games, beta, num_workers, depth1=depth, depth2=depth)
 
     bins = [0, 5, 10, 15, 20, 25, 30, 40, 50, 75, 100, 200]
     hist, _ = np.histogram(res["moves"], bins=bins)
@@ -312,7 +318,9 @@ def main():
     parser.add_argument("--self_name", type=str, default="Model", help="自己対戦モデル名称")
     parser.add_argument("--games", type=int, default=500, help="対局数 (別モデル時は先後各500局、自己対戦時は1000局)")
     parser.add_argument("--beta", type=float, default=10.0, help="逆温度 beta")
-    parser.add_argument("--depth", type=int, default=0, help="探索深さ (0: Min-Maxなし直接推論, 2: 深さ2 Min-Max探索)")
+    parser.add_argument("--depth", type=int, default=None, help="両モデル共通の探索深さ")
+    parser.add_argument("--depth1", type=int, default=0, help="モデル1の探索深さ (0: Min-Maxなし直接推論, 2: 深さ2 Min-Max探索)")
+    parser.add_argument("--depth2", type=int, default=0, help="モデル2の探索深さ (0: Min-Maxなし直接推論, 2: 深さ2 Min-Max探索)")
     parser.add_argument("--save_prefix", type=str, default="", help="出力サマリーテキストのプレフィックス")
     parser.add_argument("--workers", type=int, default=min(multiprocessing.cpu_count(), 6), help="並列プロセス数")
     args = parser.parse_args()
@@ -451,9 +459,12 @@ def main():
         run_versus_match("新Gen2", g2_path, "元Gen6", g6_path, games_per_side=500, beta=args.beta, num_workers=args.workers, save_prefix="gen2_vs_old_gen6")
         run_self_match("新Gen2", g2_path, num_games=1000, beta=args.beta, num_workers=args.workers, save_prefix="gen2")
     elif args.self_path:
-        run_self_match(args.self_name, args.self_path, num_games=args.games if args.games != 500 else 1000, beta=args.beta, num_workers=args.workers)
+        d = args.depth if args.depth is not None else args.depth1
+        run_self_match(args.self_name, args.self_path, num_games=args.games if args.games != 500 else 1000, beta=args.beta, num_workers=args.workers, save_prefix=args.save_prefix, depth=d)
     elif args.m1 and args.m2:
-        run_versus_match(args.name1, args.m1, args.name2, args.m2, games_per_side=args.games, beta=args.beta, num_workers=args.workers, save_prefix=args.save_prefix, depth=args.depth)
+        d1 = args.depth if args.depth is not None else args.depth1
+        d2 = args.depth if args.depth is not None else args.depth2
+        run_versus_match(args.name1, args.m1, args.name2, args.m2, games_per_side=args.games, beta=args.beta, num_workers=args.workers, save_prefix=args.save_prefix, depth1=d1, depth2=d2)
     else:
         parser.print_help()
 

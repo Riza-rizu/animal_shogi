@@ -54,39 +54,45 @@ def main():
         print(f"検出された新しいデータファイル数: {len(pkl_files)}")
         print("新しいデータファイルを読み込み、マージしています...")
 
-        # 新しいデータファイルの内容を一時的に集計
-        new_data = {}
+        # 新しいデータファイルの内容を一時的に集計 (メモリ節約のためリストを持たず [count, sum] のみ累積)
+        new_data_stats = {}
         for filepath in pkl_files:
             try:
                 with open(filepath, 'rb') as f:
                     data = pickle.load(f)
-                    for state_key, values in data.items():
-                        if state_key not in new_data:
-                            new_data[state_key] = []
-                        new_data[state_key].extend(values)
+                for state_key, values in data.items():
+                    v_count = len(values)
+                    v_sum = float(sum(values))
+                    if state_key in new_data_stats:
+                        new_data_stats[state_key][0] += v_count
+                        new_data_stats[state_key][1] += v_sum
+                    else:
+                        new_data_stats[state_key] = [v_count, v_sum]
+                del data
+                import gc
+                gc.collect()
             except Exception as e:
                 print(f"警告: {filepath} の読み込み中にエラーが発生しました: {e}")
 
-        print(f"新データ集計完了。ユニーク局面数: {len(new_data)}")
+        print(f"新データ集計完了。ユニーク局面数: {len(new_data_stats)}")
         print("減衰付き加重平均を計算し、累計データベースを更新しています...")
 
         # 累計データベースの更新
         updated_count = 0
         new_added_count = 0
         
-        for state_key, new_vals in new_data.items():
-            new_count = len(new_vals)
-            new_mean = float(np.mean(new_vals))
+        for state_key, (new_count, new_sum) in new_data_stats.items():
+            new_mean = new_sum / new_count
             
             if state_key in cumulative_data:
                 old_count, old_mean = cumulative_data[state_key]
                 decayed_old_count = old_count * DECAY_FACTOR
                 merged_count = decayed_old_count + new_count
-                merged_mean = (decayed_old_count * old_mean + new_count * new_mean) / merged_count
+                merged_mean = (decayed_old_count * old_mean + new_sum) / merged_count
                 cumulative_data[state_key] = (merged_count, merged_mean)
                 updated_count += 1
             else:
-                cumulative_data[state_key] = (float(new_count), new_mean)
+                cumulative_data[state_key] = (float(new_count), float(new_mean))
                 new_added_count += 1
 
         print(f"データベース更新完了 (更新: {updated_count}件, 新規追加: {new_added_count}件, 総数: {len(cumulative_data)}件)")
@@ -98,10 +104,10 @@ def main():
 
         # 今回の対局結果 S_n(x) [α=1] の生データセット配列を保存
         print("最新世代の対局評価値 S_n(x) [α=1] を配列化しています...")
-        num_new = len(new_data)
+        num_new = len(new_data_stats)
         current_data_array = np.empty((num_new, 140), dtype=np.float32)
-        for idx, (state_key, new_vals) in enumerate(new_data.items()):
-            new_mean = float(np.mean(new_vals))
+        for idx, (state_key, (new_count, new_sum)) in enumerate(new_data_stats.items()):
+            new_mean = new_sum / new_count
             scaled_sn = np.sign(new_mean) * (np.abs(new_mean) ** 0.5)
             current_data_array[idx, :139] = list(state_key)
             current_data_array[idx, 139] = scaled_sn
@@ -109,6 +115,12 @@ def main():
         current_data_filename = "current_gen_data.npy"
         np.save(current_data_filename, current_data_array)
         print(f"最新対局結果データ (S_n(x), α=1) を保存しました: {current_data_filename} (Shape: {current_data_array.shape})")
+
+        # 直ちにメモリ解放
+        del current_data_array
+        del new_data_stats
+        import gc
+        gc.collect()
 
     # =========================================================
     # 0.1刻みの勝率ビンによるデータバランシング（サンプリング）
@@ -145,21 +157,23 @@ def main():
             dataset_array[idx, :139] = list(state_key)
             dataset_array[idx, 139] = val
     else:
-        print("\n--- 全局面データセットの生成 (過去の100万局・全件学習仕様) ---")
+        print("\n--- 全局面データセットの生成 (過去の100万局・全件学習仕様: popitem省メモリ) ---")
         num_items = len(cumulative_data)
         dataset_array = np.empty((num_items, 140), dtype=np.float32)
-        keys = list(cumulative_data.keys())
-        for idx, state_key in enumerate(keys):
-            count, mean_val = cumulative_data.pop(state_key)
+        idx = 0
+        while cumulative_data:
+            state_key, (count, mean_val) = cumulative_data.popitem()
             state_vec = list(state_key)
             # 符号付き平方根（p=0.5）でスケーリングして0付近を引き伸ばす
             scaled_val = np.sign(mean_val) * (np.abs(mean_val) ** 0.5)
             dataset_array[idx, :139] = state_vec
             dataset_array[idx, 139] = scaled_val
-            if (idx + 1) % 1000000 == 0:
-                print(f"  - 配列化進行状況: {idx + 1} / {num_items} 局面完了")
-        del keys
+            idx += 1
+            if idx % 1000000 == 0:
+                print(f"  - 配列化進行状況: {idx} / {num_items} 局面完了")
         del cumulative_data
+        import gc
+        gc.collect()
 
     output_filename = "train_data.npy"
     np.save(output_filename, dataset_array)
