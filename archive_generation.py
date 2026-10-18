@@ -15,14 +15,16 @@ EXPERIMENT_ROOT = "experiments"
 
 SYSTEM_NAMES = {
     "depth0": "depth0_pure_mse",
-    "depth2": "depth2_minmax_mse"
+    "depth2": "depth2_minmax_mse",
+    "d0_rep": "d0_rep_pena_mse",
+    "d0_rep_pena_mse": "d0_rep_pena_mse"
 }
 
 
 def main():
     parser = argparse.ArgumentParser(description="各世代の成果物を系統別フォルダにアーカイブ保存")
-    parser.add_argument("--system", type=str, required=True, choices=["depth0", "depth2"],
-                        help="実験系統: depth0 (深さ0) または depth2 (深さ2 Min-Max)")
+    parser.add_argument("--system", type=str, required=True, choices=["depth0", "depth2", "d0_rep", "d0_rep_pena_mse"],
+                        help="実験系統: depth0, depth2, d0_rep (d0_rep_pena_mse)")
     parser.add_argument("--gen", type=int, required=True, help="世代番号 (0, 1, 2, ...)")
     parser.add_argument("--init_folders_only", action="store_true", help="フォルダ構造の初期作成のみ行う")
     args = parser.parse_args()
@@ -62,7 +64,7 @@ def main():
         (["animal_shogi_model.keras"], "model.keras"),
         (["train_data.npy"], "train_data.npy"),
         (["cumulative_dataset.pkl"], "cumulative_dataset.pkl"),
-        ([f"match_log_15000games_gen{player_gen}.csv", "match_log_15000games.csv"], f"match_log_15000games_gen{player_gen}.csv"),
+        ([f"match_log_1million_games_gen{player_gen}.csv", f"match_log_200000games_gen{player_gen}.csv", f"match_log_15000games_gen{player_gen}.csv", "match_log_15000games.csv"], f"match_log_1million_games_gen{player_gen}.csv"),
         ([f"match_stats_gen{player_gen}.json", "match_stats.json"], f"match_stats_gen{player_gen}.json"),
         (["scatter_evaluation.png"], "scatter_evaluation.png"),
         (["metrics.json"], "metrics.json"),

@@ -147,10 +147,16 @@ def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename, is_sn=Fals
     plt.close()
 
 
-def main():
+    SYSTEM_DIR_MAP = {
+        "depth0": "depth0_pure_mse",
+        "depth2": "depth2_minmax_mse",
+        "d0_rep": "d0_rep_pena_mse",
+        "d0_rep_pena_mse": "d0_rep_pena_mse"
+    }
+
     parser = argparse.ArgumentParser(description="世代自己評価スクリプト")
-    parser.add_argument("--system", type=str, required=True, choices=["depth0", "depth2"],
-                        help="実験系統: depth0 (深さ0) または depth2 (深さ2 Min-Max)")
+    parser.add_argument("--system", type=str, required=True, choices=["depth0", "depth2", "d0_rep", "d0_rep_pena_mse"],
+                        help="実験系統: depth0, depth2, d0_rep")
     parser.add_argument("--gen", type=int, required=True, help="世代番号 (例: 1, 2, ...)")
     parser.add_argument("--model", type=str, default="animal_shogi_model.keras", help="モデルパス")
     parser.add_argument("--data", type=str, default=None, help="教師データパス (未指定時は current_gen_data.npy 優先)")
@@ -163,7 +169,7 @@ def main():
 
     is_sn = False
     if args.archived:
-        system_dir_name = "depth0_pure_mse" if args.system == "depth0" else "depth2_minmax_mse"
+        system_dir_name = SYSTEM_DIR_MAP[args.system]
         archived_dir = os.path.join("experiments", system_dir_name, f"gen{args.gen}")
         args.model = os.path.join(archived_dir, "model.keras")
         sn_path = os.path.join(archived_dir, "current_gen_data.npy")
