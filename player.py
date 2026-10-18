@@ -26,12 +26,12 @@ class BasePlayer:
     def __init__(self, player_id):
         self.player_id = player_id
 
-    def choose_move(self, board, legal_moves):
+    def choose_move(self, board, legal_moves, *args, **kwargs):
         raise NotImplementedError
 
 
 class HumanPlayer(BasePlayer):
-    def choose_move(self, board, legal_moves):
+    def choose_move(self, board, legal_moves, *args, **kwargs):
         print(f"プレイヤー {self.player_id} の手番です。")
         for i, move in enumerate(legal_moves):
             print(f"{i}: {move}")
@@ -46,7 +46,7 @@ class HumanPlayer(BasePlayer):
 
 
 class RandomPlayer(BasePlayer):
-    def choose_move(self, board, legal_moves):
+    def choose_move(self, board, legal_moves, *args, **kwargs):
         if not legal_moves:
             return None
         return legal_moves[np.random.choice(len(legal_moves))]
@@ -160,9 +160,44 @@ class ModelPlayer:
             self.loss_val = 0.0
             self.neutral_val = 0.5
 
-    def choose_move(self, board, legal_moves):
+    def _apply_repetition_penalty(self, board, legal_moves, evals, history_counts, gamma):
+        """
+        千日手防止のための幾何減衰レピティション・ペナルティを適用
+        V_penalized = loss_val + (V0 - loss_val) * (gamma ** k)
+        """
+        if not history_counts or gamma is None:
+            return evals
+        
+        opponent_id = 3 - self.player_id
+        for m_idx, move in enumerate(legal_moves):
+            # 即勝ち手の場合は減衰不要（勝てるなら勝つ）
+            if evals[m_idx] >= self.win_val - 1e-5:
+                continue
+            # 即死手の場合もこれ以上下げる必要なし
+            if evals[m_idx] <= self.loss_val + 1e-5:
+                continue
+
+            next_board = board.copy()
+            GameEngine.make_move(next_board, move, self.player_id)
+            next_state_key = (next_board.to_hashable(), opponent_id)
+            k = history_counts.get(next_state_key, 0)
+            if k > 0:
+                v0 = evals[m_idx]
+                if self.is_tanh:
+                    evals[m_idx] = -1.0 + (v0 + 1.0) * (gamma ** k)
+                else:
+                    evals[m_idx] = 0.0 + (v0 - 0.0) * (gamma ** k)
+        return evals
+
+    def choose_move(self, board, legal_moves, history_counts=None, gamma=0.6):
         """
         手を選択する（depth=0: 直接推論, depth=2: 深さ2 Min-Max探索）
+        
+        Args:
+            board: 現在のBoardオブジェクト
+            legal_moves: 合法手リスト
+            history_counts: 局面キー ((grid_t, h1, h2), current_player) の出現回数を記録したCounter/dict
+            gamma: レピティション・ペナルティの減衰率（デフォルト: 0.6）
         """
         if not legal_moves:
             return None
@@ -195,6 +230,9 @@ class ModelPlayer:
                         evals[m_idx] = -float(pred)
                     else:
                         evals[m_idx] = 1.0 - float(pred)
+
+            # 千日手レピティション・ペナルティの適用
+            evals = self._apply_repetition_penalty(board, legal_moves, evals, history_counts, gamma)
 
             # ソフトマックスで選択
             best_idx = int(self.np.argmax(evals))
@@ -274,7 +312,10 @@ class ModelPlayer:
                 else:
                     evals[m_idx] = self.neutral_val
 
-        # 4. ソフトマックス関数を用いて選択確率を計算
+        # 4. 千日手レピティション・ペナルティの適用
+        evals = self._apply_repetition_penalty(board, legal_moves, evals, history_counts, gamma)
+
+        # 5. ソフトマックス関数を用いて選択確率を計算
         beta = self.beta
         best_idx = int(self.np.argmax(evals))
 

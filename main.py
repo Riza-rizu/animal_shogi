@@ -7,6 +7,7 @@ import pickle
 import os
 import yaml
 import numpy as np
+from collections import Counter
 from board import Board, state2vec
 from engine import GameEngine
 from player import HumanPlayer, RandomPlayer, ModelPlayer, load_keras_model_safe
@@ -44,6 +45,7 @@ def run_simulation(yaml_path):
     model_path = config.get('model_path', 'animal_shogi_model.keras')
     beta = config.get('beta', 10.0)
     depth = config.get('depth', 2)
+    gamma = config.get('gamma', 0.6)
     
     # 乱数シードの設定
     import random
@@ -76,7 +78,7 @@ def run_simulation(yaml_path):
         except Exception as e:
             print(f"警告: 既存の {output_filename} の読み込みに失敗しました。新規作成します。エラー: {e}")
             
-    print(f"シード値: {seed}, 試合数: {games}, 割引率(alpha): {alpha} でシミュレーションを開始します。")
+    print(f"シード値: {seed}, 試合数: {games}, 割引率(alpha): {alpha}, 千日手ペナルティ(gamma): {gamma} でシミュレーションを開始します。")
     print(f"プレイヤー1: {p1_type}, プレイヤー2: {p2_type}")
     print(f"出力ファイル: {output_filename}")
     
@@ -100,6 +102,8 @@ def run_simulation(yaml_path):
         
         # 1試合の履歴を記録するリスト: (state_vector, player_id)
         history = []
+        # 同一局面の出現回数を記録するCounter: ((grid_t, h1, h2), player_id) -> count
+        state_counts = Counter()
         
         # 千日手
         max_moves = 200
@@ -109,6 +113,10 @@ def run_simulation(yaml_path):
         game_moves = []
         
         for move_count in range(max_moves):
+            # 現時点の局面キーを記録
+            current_state_key = (board.to_hashable(), current_player_id)
+            state_counts[current_state_key] += 1
+
             # 現時点の状態ベクトルを記録
             state_vec = state2vec(board, current_player_id)
             history.append((state_vec, current_player_id))
@@ -119,7 +127,9 @@ def run_simulation(yaml_path):
                 winner = PLAYER_2 if current_player_id == PLAYER_1 else PLAYER_1
                 break
                 
-            selected_move = players[current_player_id].choose_move(board, legal_moves)
+            selected_move = players[current_player_id].choose_move(
+                board, legal_moves, history_counts=state_counts, gamma=gamma
+            )
             game_moves.append(str(selected_move))
             GameEngine.make_move(board, selected_move, current_player_id)
             
