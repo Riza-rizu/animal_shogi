@@ -83,19 +83,49 @@ class GameEngine:
         return captured_piece
 
     @staticmethod
+    def can_capture_target(board, player, target_pos):
+        """
+        指定プレイヤーが次の1手で target_pos (col, row) にある駒を取れるか判定
+        """
+        legal_moves = GameEngine.get_legal_moves(board, player)
+        for move in legal_moves:
+            if move.to_pos == target_pos:
+                return True
+        return False
+
+    @staticmethod
     def check_winner(board):
-        """勝敗を判定する。ゲーム継続なら None"""
+        """
+        勝敗を判定する。ゲーム継続なら None
+        
+        【公式ルール準拠】
+        1. キャッチ (相手ライオン捕獲): 最優先で即座に勝ち
+        2. トライ (敵陣1段目到達): 
+           最奥マスに到達し、かつ「次の相手手番でそのライオンを取られない」場合にトライ成功（勝ち）。
+           もし次の相手手番で取られる可能性がある場合は、勝敗は保留（ゲーム継続）。
+        """
         # 盤上のライオンを捜索
         p1_lion = board.find_lion(PLAYER_1)
         p2_lion = board.find_lion(PLAYER_2)
 
+        # 1. キャッチ判定（ライオンが取られたら即敗北）
         if not p1_lion: return PLAYER_2  # 先手ライオンが取られた
         if not p2_lion: return PLAYER_1  # 後手ライオンが取られた
 
-        # トライルールの簡易判定
-        # ※本来は「次の手に取られないこと」が必要
-        if p1_lion[1] == 0: return PLAYER_1
-        if p2_lion[1] == ROWS - 1: return PLAYER_2
+        # 2. 公式トライルールの判定
+        # 先手ライオンが最奥(row=0)にいる場合
+        if p1_lion[1] == 0:
+            # 後手(PLAYER_2)が次の1手でこのライオンを取れないなら、先手のトライ勝ち！
+            if not GameEngine.can_capture_target(board, PLAYER_2, p1_lion):
+                return PLAYER_1
+            # 取られる可能性がある場合は、まだ勝ちにならない（ゲーム継続）
+
+        # 後手ライオンが最奥(row=ROWS-1)にいる場合
+        if p2_lion[1] == ROWS - 1:
+            # 先手(PLAYER_1)が次の1手でこのライオンを取れないなら、後手のトライ勝ち！
+            if not GameEngine.can_capture_target(board, PLAYER_1, p2_lion):
+                return PLAYER_2
+            # 取られる可能性がある場合は、まだ勝ちにならない（ゲーム継続）
 
         return None
 
