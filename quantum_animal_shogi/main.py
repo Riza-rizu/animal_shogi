@@ -93,16 +93,32 @@ def run_simulation(yaml_path):
         game_moves = 0
         max_moves = 200
         winner = None
+        win_reason = "Draw_MaxMoves"
         game_moves_list = []
+        game_moves_coords = []
+        game_probs_list = []
+        p1_collapse_ply = -1
+        p2_collapse_ply = -1
 
         while game_moves < max_moves:
             s_vec = state2vec(board, current_p)
             b_key = to_bytes_key(s_vec)
             game_history.append((b_key, current_p))
 
+            # 現在の全8駒の確率分布 (8, 5: L, G, E, C, H) を記録
+            probs_matrix = board.get_all_piece_probs_array()
+            game_probs_list.append(probs_matrix)
+
+            # ライオン確定タイミングの検出
+            if p1_collapse_ply == -1 and board.get_determined_lion_id(PLAYER_1) is not None:
+                p1_collapse_ply = game_moves
+            if p2_collapse_ply == -1 and board.get_determined_lion_id(PLAYER_2) is not None:
+                p2_collapse_ply = game_moves
+
             legal_moves = GameEngine.get_legal_moves(board, current_p)
             if not legal_moves:
                 winner = 3 - current_p
+                win_reason = "NoLegalMoves"
                 break
 
             p_obj = players[current_p]
@@ -112,11 +128,19 @@ def run_simulation(yaml_path):
                 move = p_obj.choose_move(board, legal_moves)
 
             game_moves_list.append(str(move))
+            # 着手座標情報の記録 [from_c, from_r, to_c, to_r, owner, pid, is_drop]
+            fc = -1 if move.is_drop else move.from_pos[0]
+            fr = -1 if move.is_drop else move.from_pos[1]
+            tc, tr = move.to_pos[0], move.to_pos[1]
+            m_owner, m_pid = move.piece_token
+            game_moves_coords.append([fc, fr, tc, tr, m_owner, m_pid, 1 if move.is_drop else 0])
+
             GameEngine.make_move(board, move, current_p)
             game_moves += 1
 
-            winner = GameEngine.check_winner(board)
+            winner, reason = GameEngine.check_winner_detail(board)
             if winner is not None:
+                win_reason = reason
                 break
 
             current_p = 3 - current_p
@@ -125,6 +149,7 @@ def run_simulation(yaml_path):
 
         if winner is None:
             winner = RESULT_DRAW
+            win_reason = "Draw_MaxMoves"
 
         if winner == PLAYER_1:
             p1_wins += 1
@@ -140,8 +165,13 @@ def run_simulation(yaml_path):
             "game_id": g + 1,
             "winner": winner,
             "moves": game_moves,
+            "win_reason": win_reason,
+            "p1_collapse_ply": p1_collapse_ply,
+            "p2_collapse_ply": p2_collapse_ply,
             "is_short_game": (game_moves <= 6 and winner != RESULT_DRAW),
-            "moves_10": game_moves_list[:10]
+            "moves_10": game_moves_list[:10],
+            "moves_coords": np.array(game_moves_coords, dtype=np.int8) if game_moves_coords else np.empty((0, 7), dtype=np.int8),
+            "all_probs": np.array(game_probs_list, dtype=np.float16) if game_probs_list else np.empty((0, 8, 5), dtype=np.float16)
         })
 
         # モンテカルロ価値更新（各通過局面に割引率を掛けながら反映）

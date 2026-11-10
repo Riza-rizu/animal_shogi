@@ -25,7 +25,11 @@ class Move:
 
     def __str__(self):
         owner, pid = self.piece_token
-        p_str = f"P{owner}_id{pid}"
+        # 第6期までの棋譜分析スクリプトと100%互換にするため、通常初期位置の駒記号に対応
+        # P1: 0->e, 1->l, 2->g, 3->c / P2: 0->E, 1->L, 2->G, 3->C
+        p1_map = {0: 'e', 1: 'l', 2: 'g', 3: 'c'}
+        p2_map = {0: 'E', 1: 'L', 2: 'G', 3: 'C'}
+        p_str = p1_map.get(pid, f"p1_{pid}") if owner == 1 else p2_map.get(pid, f"p2_{pid}")
         if self.is_drop:
             return f"打 {p_str} -> ({self.to_pos[0]},{self.to_pos[1]})"
         return f"動 {p_str}: ({self.from_pos[0]},{self.from_pos[1]}) -> ({self.to_pos[0]},{self.to_pos[1]})"
@@ -198,3 +202,36 @@ class GameEngine:
                         return PLAYER_2
 
         return None
+
+    @staticmethod
+    def check_winner_detail(board):
+        """
+        勝敗と勝因をタプル (winner, reason) で返す。
+        継続なら (None, None)
+        reason: 'Catch', 'Try', 'Extinction'
+        """
+        p1_has_lion = any(board.can_be_lion(PLAYER_1, pid) for pid in range(4))
+        p2_has_lion = any(board.can_be_lion(PLAYER_2, pid) for pid in range(4))
+
+        if not p1_has_lion:
+            return PLAYER_2, "Extinction"
+        if not p2_has_lion:
+            return PLAYER_1, "Extinction"
+
+        for c in range(COLS):
+            cell = board.get(c, 0)
+            if cell is not None:
+                ctrl, owner, pid = cell
+                if ctrl == PLAYER_1 and board.can_be_lion(owner, pid):
+                    if not GameEngine.can_capture_target(board, PLAYER_2, (c, 0)):
+                        return PLAYER_1, "Try"
+
+        for c in range(COLS):
+            cell = board.get(c, ROWS - 1)
+            if cell is not None:
+                ctrl, owner, pid = cell
+                if ctrl == PLAYER_2 and board.can_be_lion(owner, pid):
+                    if not GameEngine.can_capture_target(board, PLAYER_1, (c, ROWS - 1)):
+                        return PLAYER_2, "Try"
+
+        return None, None

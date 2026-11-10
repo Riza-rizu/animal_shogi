@@ -103,6 +103,16 @@ def main():
             short_games = sum(1 for r in all_records if r.get('is_short_game', False))
             avg_moves = float(np.mean([r.get('moves', 0) for r in all_records])) if total_games > 0 else 0.0
 
+            # 勝因の集計
+            reasons_count = {}
+            for r in all_records:
+                rs = r.get('win_reason', 'Unknown')
+                reasons_count[rs] = reasons_count.get(rs, 0) + 1
+
+            # ライオン確定手数の集計
+            p1_collapses = [r['p1_collapse_ply'] for r in all_records if r.get('p1_collapse_ply', -1) >= 0]
+            p2_collapses = [r['p2_collapse_ply'] for r in all_records if r.get('p2_collapse_ply', -1) >= 0]
+
             player_gen = (args.gen - 1) if args.gen is not None else None
             match_stats = {
                 "player_generation": f"Gen{player_gen}" if player_gen is not None else "Unknown",
@@ -116,10 +126,13 @@ def main():
                 "draw_rate": round(draws / total_games * 100.0, 2) if total_games > 0 else 0.0,
                 "avg_moves": round(avg_moves, 2),
                 "short_games_3_to_6": short_games,
-                "short_game_rate": round(short_games / total_games * 100.0, 2) if total_games > 0 else 0.0
+                "short_game_rate": round(short_games / total_games * 100.0, 2) if total_games > 0 else 0.0,
+                "win_reasons": reasons_count,
+                "avg_p1_lion_collapse_ply": round(float(np.mean(p1_collapses)), 2) if p1_collapses else None,
+                "avg_p2_lion_collapse_ply": round(float(np.mean(p2_collapses)), 2) if p2_collapses else None
             }
 
-            # match_stats.json 保存 (第6期と完全同一)
+            # match_stats.json 保存 (第6期と完全同一＋量子拡張)
             with open("match_stats.json", 'w', encoding='utf-8') as f:
                 json.dump(match_stats, f, ensure_ascii=False, indent=2)
             if player_gen is not None:
@@ -129,26 +142,76 @@ def main():
                 print(f"対局統計サマリーを保存しました: match_stats.json / {gen_stats_filename}")
             else:
                 print(f"対局統計サマリーを保存しました: match_stats.json")
-            print(f"  - 総対戦数: {total_games}, 先手勝率: {match_stats['p1_win_rate']}%, 後手勝率: {match_stats['p2_win_rate']}%, 千日手率: {match_stats['draw_rate']}%, 平均手数: {match_stats['avg_moves']}, 即死(3-6手): {short_games}局 ({match_stats['short_game_rate']}%)")
+            print(f"  - 総対戦数: {total_games}, 先手勝率: {match_stats['p1_win_rate']}%, 後手勝率: {match_stats['p2_win_rate']}%, 千日手率: {match_stats['draw_rate']}%, 平均手数: {match_stats['avg_moves']}, 即死: {short_games}局")
+            print(f"  - 勝因内訳: {reasons_count}")
 
-            # CSV 保存 (第6期と完全同一の10手目までのヘッダー)
+            # ---------------------------------------------------------
+            # 1. サマリー CSV 保存 (第6期互換 + 量子分析カラム)
+            # ---------------------------------------------------------
             player_gen_str = f"_gen{player_gen}" if player_gen is not None else ""
-            csv_filename = f"match_log_{total_games}games{player_gen_str}.csv"
-            header = ["game_id", "winner", "moves", "is_short_game"] + [f"move_{i+1}" for i in range(10)]
-            with open(csv_filename, "w", newline="", encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(header)
-                for idx, r in enumerate(all_records):
-                    gid = r.get("game_id", idx + 1)
-                    w = r.get("winner", 0)
-                    m = r.get("moves", 0)
-                    is_short = r.get("is_short_game", False)
-                    moves_10 = r.get("moves_10", [])
-                    row = [gid, w, m, is_short]
-                    for step_idx in range(10):
-                        row.append(moves_10[step_idx] if step_idx < len(moves_10) else "")
-                    writer.writerow(row)
-            print(f"対局ログCSVを保存しました: {csv_filename}")
+            csv_filenames = [
+                f"match_log_1million_games{player_gen_str}.csv",
+                f"match_summary_1million_games{player_gen_str}.csv"
+            ]
+            header = ["game_id", "winner", "moves", "is_short_game", "win_reason", "p1_collapse_ply", "p2_collapse_ply"] + [f"move_{i+1}" for i in range(10)]
+            
+            for csv_fn in csv_filenames:
+                with open(csv_fn, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(header)
+                    for idx, r in enumerate(all_records):
+                        gid = r.get("game_id", idx + 1)
+                        w = r.get("winner", 0)
+                        m = r.get("moves", 0)
+                        is_short = r.get("is_short_game", False)
+                        reason = r.get("win_reason", "")
+                        p1_c = r.get("p1_collapse_ply", -1)
+                        p2_c = r.get("p2_collapse_ply", -1)
+                        moves_10 = r.get("moves_10", [])
+                        row = [gid, w, m, is_short, reason, p1_c, p2_c]
+                        for step_idx in range(10):
+                            row.append(moves_10[step_idx] if step_idx < len(moves_10) else "")
+                        writer.writerow(row)
+                print(f"対局ログCSVを保存しました: {csv_fn}")
+
+            # ---------------------------------------------------------
+            # 2. 全手番・全駒確率分布バイナリ (match_replay_genX.npz) の生成
+            # ---------------------------------------------------------
+            if 'moves_coords' in all_records[0] and 'all_probs' in all_records[0]:
+                print("\n全手番・全駒確率分布 (match_replay.npz) を構築中...")
+                games_ptr = [0]
+                all_moves_list = []
+                all_probs_list = []
+
+                curr_ptr = 0
+                for r in all_records:
+                    m_arr = r.get('moves_coords')
+                    p_arr = r.get('all_probs')
+                    n_steps = len(m_arr)
+                    curr_ptr += n_steps
+                    games_ptr.append(curr_ptr)
+                    if n_steps > 0:
+                        all_moves_list.append(m_arr)
+                        all_probs_list.append(p_arr)
+
+                games_ptr_np = np.array(games_ptr, dtype=np.int32)
+                concat_moves = np.vstack(all_moves_list) if all_moves_list else np.empty((0, 7), dtype=np.int8)
+                concat_probs = np.vstack(all_probs_list) if all_probs_list else np.empty((0, 8, 5), dtype=np.float16)
+
+                replay_fn = f"match_replay{player_gen_str}.npz"
+                np.savez_compressed(
+                    replay_fn,
+                    games_ptr=games_ptr_np,
+                    moves=concat_moves,
+                    probs=concat_probs
+                )
+                np.savez_compressed(
+                    "match_replay.npz",
+                    games_ptr=games_ptr_np,
+                    moves=concat_moves,
+                    probs=concat_probs
+                )
+                print(f"全手番リプレイバイナリを保存しました: {replay_fn} (総手数: {len(concat_moves):,} 手, 配列形状: {concat_probs.shape})")
 
     # 一時 pkl ファイルの退避
     if pkl_files:

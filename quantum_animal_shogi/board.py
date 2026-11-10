@@ -130,6 +130,31 @@ class QuantumBoard:
             probs[k] /= tot
         return probs
 
+    def get_all_piece_probs_array(self):
+        """
+        全8駒（先手4駒 + 後手4駒）の各駒種確率を (8, 5) の NumPy 配列で返す。
+        駒種順: [LION, GIRAFFE, ELEPHANT, CHICK, HEN]
+        インデックス 0..3: 先手 P1 (pid 0..3)
+        インデックス 4..7: 後手 P2 (pid 0..3)
+        """
+        piece_order = [PIECE_LION, PIECE_GIRAFFE, PIECE_ELEPHANT, PIECE_CHICK, PIECE_HEN]
+        res = np.zeros((8, 5), dtype=np.float32)
+        row = 0
+        for owner in [PLAYER_1, PLAYER_2]:
+            for pid in range(4):
+                p_dict = self.get_probabilities(owner, pid)
+                for col, p_type in enumerate(piece_order):
+                    res[row, col] = p_dict[p_type]
+                row += 1
+        return res
+
+    def get_determined_lion_id(self, owner):
+        """そのプレイヤーのライオンが確定している場合、その pid を返す。未確定なら None"""
+        for pid in range(4):
+            if self.is_determined_lion(owner, pid):
+                return pid
+        return None
+
     # ---- 持ち駒操作 ----
 
     def add_to_hand(self, capturing_player, captured_owner, captured_pid):
