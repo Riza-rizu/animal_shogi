@@ -10,13 +10,13 @@ import json
 import argparse
 
 EXPERIMENT_ROOT = "experiments"
-SYSTEM_DIR_NAME = "d0_six"
+SYSTEM_DIR_NAME = "quantum_d0"
 
 
 def main():
     parser = argparse.ArgumentParser(description="各世代の成果物を系統別フォルダにアーカイブ保存")
     parser.add_argument("--gen", type=int, required=True, help="世代番号 (0, 1, 2, ...)")
-    parser.add_argument("--system", type=str, default="d0_six", help="実験系統名")
+    parser.add_argument("--system", type=str, default="quantum_d0", help="実験系統名")
     args = parser.parse_args()
 
     target_dir = os.path.join(EXPERIMENT_ROOT, args.system, f"gen{args.gen}")
@@ -33,9 +33,9 @@ def main():
         if not os.path.exists(model_src):
             model_src = "quantum_model.keras"
         if os.path.exists(model_src):
-            dst_path = os.path.join(target_dir, "model.keras")
+            dst_path = os.path.join(target_dir, "quantum_model_gen0.keras")
             shutil.copy2(model_src, dst_path)
-            print(f"  [OK] {model_src} -> model.keras")
+            print(f"  [OK] {model_src} -> quantum_model_gen0.keras")
         print(f"Gen0 の初期モデルを {target_dir} に保存しました。")
         return
 
@@ -43,7 +43,7 @@ def main():
 
     # 保存対象ファイルリスト
     archive_tasks = [
-        ([f"quantum_model_gen{args.gen}.keras", "quantum_model.keras"], "model.keras"),
+        ([f"quantum_model_gen{args.gen}.keras", "quantum_model.keras"], f"quantum_model_gen{args.gen}.keras"),
         (["train_data.npy"], "train_data.npy"),
         (["cumulative_dataset.pkl"], "cumulative_dataset.pkl"),
         (sorted(glob.glob(f"match_log_*games_gen{player_gen}.csv") + glob.glob("match_log_*games.csv")), f"match_log_gen{player_gen}.csv"),
