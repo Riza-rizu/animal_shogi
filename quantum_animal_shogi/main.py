@@ -174,15 +174,22 @@ def run_simulation(yaml_path):
             "all_probs": np.array(game_probs_list, dtype=np.float16) if game_probs_list else np.empty((0, 8, 5), dtype=np.float16)
         })
 
-        # モンテカルロ価値更新（各通過局面に割引率を掛けながら反映）
+        # モンテカルロ価値更新（その局面の手番プレイヤー step_p から見た勝敗評価値を蓄積）
         for step_i, (b_key, step_p) in enumerate(game_history):
             dist_from_end = len(game_history) - 1 - step_i
-            discounted_eval = final_eval * (alpha ** dist_from_end)
+            discount = alpha ** dist_from_end
+
+            if winner == RESULT_DRAW:
+                step_eval = 0.0
+            elif winner == step_p:
+                step_eval = 1.0 * discount
+            else:
+                step_eval = -1.0 * discount
 
             if b_key not in data_dict:
                 data_dict[b_key] = [0, 0.0]
             data_dict[b_key][0] += 1
-            data_dict[b_key][1] += discounted_eval
+            data_dict[b_key][1] += step_eval
 
         if (g + 1) % 100 == 0 or (g + 1) == games:
             print(f"[{os.path.basename(yaml_path)}] 進捗: {g + 1}/{games} 局完了 (P1: {p1_wins}, P2: {p2_wins}, 引分: {draws})")
