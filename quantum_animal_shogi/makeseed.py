@@ -16,6 +16,8 @@ def main():
                         help="プレイヤー2の種別 (ai または random)")
     parser.add_argument("--gamma", type=float, default=0.6,
                         help="千日手レピティション・ペナルティ減衰率 (デフォルト: 0.6)")
+    parser.add_argument("--alpha", type=float, default=0.95,
+                        help="終局手数に応じた時間割引率 (デフォルト: 0.95)")
     parser.add_argument("--n_files", type=int, default=50, help="生成するワーカー数 (デフォルト: 50)")
     parser.add_argument("--total_games", type=int, default=None,
                         help="総試合数 (未指定時は depth=0 で 100万局, depth=2 で 20万局)")
@@ -35,7 +37,7 @@ def main():
 
     games_per_file = total_games // args.n_files
 
-    print(f"設定ファイルを生成します: p1={args.p1}, p2={args.p2}, ワーカー数={args.n_files}, 1ファイル={games_per_file}局 (合計={total_games}局), 探索深さ={args.depth}")
+    print(f"設定ファイルを生成します: p1={args.p1}, p2={args.p2}, ワーカー数={args.n_files}, 1ファイル={games_per_file}局 (合計={total_games}局), 探索深さ={args.depth}, alpha={args.alpha}")
 
     for i in range(args.n_files):
         with open(f"input{i:03d}.yaml", "w", encoding="utf-8") as f:
@@ -47,6 +49,7 @@ def main():
             f.write(f"beta: {args.beta}\n")
             f.write(f"depth: {args.depth}\n")
             f.write(f"gamma: {args.gamma}\n")
+            f.write(f"alpha: {args.alpha}\n")
 
     with open("tasks.sh", "w", encoding="utf-8") as f:
         for i in range(args.n_files):

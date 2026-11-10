@@ -93,6 +93,7 @@ def run_simulation(yaml_path):
         game_moves = 0
         max_moves = 200
         winner = None
+        game_moves_list = []
 
         while game_moves < max_moves:
             s_vec = state2vec(board, current_p)
@@ -110,6 +111,7 @@ def run_simulation(yaml_path):
             else:
                 move = p_obj.choose_move(board, legal_moves)
 
+            game_moves_list.append(str(move))
             GameEngine.make_move(board, move, current_p)
             game_moves += 1
 
@@ -135,9 +137,11 @@ def run_simulation(yaml_path):
             final_eval = 0.0
 
         match_records.append({
-            "game": g,
+            "game_id": g + 1,
             "winner": winner,
-            "moves": game_moves
+            "moves": game_moves,
+            "is_short_game": (game_moves <= 6 and winner != RESULT_DRAW),
+            "moves_10": game_moves_list[:10]
         })
 
         # モンテカルロ価値更新（各通過局面に割引率を掛けながら反映）

@@ -84,57 +84,71 @@ def main():
     print(f"train_data.npy を保存しました (形状: {dataset.shape})")
 
     # 対局ログ (match_log_*.pkl) の集約と統計保存
-    total_games = 0
-    p1_wins = 0
-    p2_wins = 0
-    draws = 0
-    move_lengths = []
-
     if log_files:
-        print(f"対局ログ {len(log_files)} 個を集約中...")
-        csv_records = []
+        print(f"\n対局ログ {len(log_files)} 個を集約中...")
+        all_records = []
         for log_f in log_files:
-            with open(log_f, 'rb') as f:
-                records = pickle.load(f)
-            for r in records:
-                total_games += 1
-                w = r["winner"]
-                m = r["moves"]
-                move_lengths.append(m)
-                if w == 1:
-                    p1_wins += 1
-                elif w == 2:
-                    p2_wins += 1
-                else:
-                    draws += 1
-                csv_records.append([total_games, w, m])
+            try:
+                with open(log_f, 'rb') as f:
+                    records = pickle.load(f)
+                    all_records.extend(records)
+            except Exception as e:
+                print(f"警告: {log_f} の読み込みに失敗しました: {e}")
 
-        # CSV 保存
-        player_gen_str = f"_gen{args.gen - 1}" if args.gen is not None else ""
-        csv_filename = f"match_log_{total_games}games{player_gen_str}.csv"
-        with open(csv_filename, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["game_id", "winner", "moves"])
-            writer.writerows(csv_records)
+        if all_records:
+            total_games = len(all_records)
+            p1_wins = sum(1 for r in all_records if r.get('winner') == 1)
+            p2_wins = sum(1 for r in all_records if r.get('winner') == 2)
+            draws = sum(1 for r in all_records if r.get('winner') not in (1, 2))
+            short_games = sum(1 for r in all_records if r.get('is_short_game', False))
+            avg_moves = float(np.mean([r.get('moves', 0) for r in all_records])) if total_games > 0 else 0.0
 
-        # JSON 統計保存
-        stats = {
-            "total_games": total_games,
-            "p1_wins": p1_wins,
-            "p2_wins": p2_wins,
-            "draws": draws,
-            "p1_win_rate": p1_wins / total_games if total_games > 0 else 0,
-            "p2_win_rate": p2_wins / total_games if total_games > 0 else 0,
-            "draw_rate": draws / total_games if total_games > 0 else 0,
-            "average_moves": float(np.mean(move_lengths)) if move_lengths else 0
-        }
-        stats_filename = f"match_stats{player_gen_str}.json"
-        with open(stats_filename, "w", encoding="utf-8") as f:
-            json.dump(stats, f, indent=2)
-        with open("match_stats.json", "w", encoding="utf-8") as f:
-            json.dump(stats, f, indent=2)
+            player_gen = (args.gen - 1) if args.gen is not None else None
+            match_stats = {
+                "player_generation": f"Gen{player_gen}" if player_gen is not None else "Unknown",
+                "created_model_generation": f"Gen{args.gen}" if args.gen is not None else "Unknown",
+                "total_games": total_games,
+                "p1_wins": p1_wins,
+                "p1_win_rate": round(p1_wins / total_games * 100.0, 2) if total_games > 0 else 0.0,
+                "p2_wins": p2_wins,
+                "p2_win_rate": round(p2_wins / total_games * 100.0, 2) if total_games > 0 else 0.0,
+                "draws": draws,
+                "draw_rate": round(draws / total_games * 100.0, 2) if total_games > 0 else 0.0,
+                "avg_moves": round(avg_moves, 2),
+                "short_games_3_to_6": short_games,
+                "short_game_rate": round(short_games / total_games * 100.0, 2) if total_games > 0 else 0.0
+            }
 
-        print(f"対局統計: 総対局 {total_games}, P1勝率 {stats['p1_win_rate']*100:.1f}%, P2勝率 {stats['p2_win_rate']*100:.1f}%, 平均手数 {stats['average_moves']:.1f}")
+            # match_stats.json 保存 (第6期と完全同一)
+            with open("match_stats.json", 'w', encoding='utf-8') as f:
+                json.dump(match_stats, f, ensure_ascii=False, indent=2)
+            if player_gen is not None:
+                gen_stats_filename = f"match_stats_gen{player_gen}.json"
+                with open(gen_stats_filename, 'w', encoding='utf-8') as f:
+                    json.dump(match_stats, f, ensure_ascii=False, indent=2)
+                print(f"対局統計サマリーを保存しました: match_stats.json / {gen_stats_filename}")
+            else:
+                print(f"対局統計サマリーを保存しました: match_stats.json")
+            print(f"  - 総対戦数: {total_games}, 先手勝率: {match_stats['p1_win_rate']}%, 後手勝率: {match_stats['p2_win_rate']}%, 千日手率: {match_stats['draw_rate']}%, 平均手数: {match_stats['avg_moves']}, 即死(3-6手): {short_games}局 ({match_stats['short_game_rate']}%)")
+
+            # CSV 保存 (第6期と完全同一の10手目までのヘッダー)
+            player_gen_str = f"_gen{player_gen}" if player_gen is not None else ""
+            csv_filename = f"match_log_{total_games}games{player_gen_str}.csv"
+            header = ["game_id", "winner", "moves", "is_short_game"] + [f"move_{i+1}" for i in range(10)]
+            with open(csv_filename, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(header)
+                for idx, r in enumerate(all_records):
+                    gid = r.get("game_id", idx + 1)
+                    w = r.get("winner", 0)
+                    m = r.get("moves", 0)
+                    is_short = r.get("is_short_game", False)
+                    moves_10 = r.get("moves_10", [])
+                    row = [gid, w, m, is_short]
+                    for step_idx in range(10):
+                        row.append(moves_10[step_idx] if step_idx < len(moves_10) else "")
+                    writer.writerow(row)
+            print(f"対局ログCSVを保存しました: {csv_filename}")
 
     # 一時 pkl ファイルの退避
     if pkl_files:
