@@ -147,16 +147,18 @@ def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename, is_sn=Fals
     plt.close()
 
 
+def main():
     SYSTEM_DIR_MAP = {
         "depth0": "depth0_pure_mse",
         "depth2": "depth2_minmax_mse",
         "d0_rep": "d0_rep_pena_mse",
-        "d0_rep_pena_mse": "d0_rep_pena_mse"
+        "d0_rep_pena_mse": "d0_rep_pena_mse",
+        "d0_six": "d0_six"
     }
 
     parser = argparse.ArgumentParser(description="世代自己評価スクリプト")
-    parser.add_argument("--system", type=str, required=True, choices=["depth0", "depth2", "d0_rep", "d0_rep_pena_mse"],
-                        help="実験系統: depth0, depth2, d0_rep")
+    parser.add_argument("--system", type=str, required=True, choices=["depth0", "depth2", "d0_rep", "d0_rep_pena_mse", "d0_six"],
+                        help="実験系統: depth0, depth2, d0_rep, d0_six")
     parser.add_argument("--gen", type=int, required=True, help="世代番号 (例: 1, 2, ...)")
     parser.add_argument("--model", type=str, default="animal_shogi_model.keras", help="モデルパス")
     parser.add_argument("--data", type=str, default=None, help="教師データパス (未指定時は current_gen_data.npy 優先)")
@@ -196,7 +198,14 @@ def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename, is_sn=Fals
         print(f"エラー: モデルまたはデータが見つかりません (model={args.model}, data={args.data})")
         sys.exit(1)
 
-    system_label = "Depth 0, No Min-Max" if args.system == "depth0" else "Depth 2, Min-Max"
+    if "d0_six" in args.system:
+        system_label = "Depth 0, WarmStart Gen6+"
+    elif "d0_rep" in args.system:
+        system_label = "Depth 0, Rep Penalty"
+    elif args.system == "depth0":
+        system_label = "Depth 0, No Min-Max"
+    else:
+        system_label = "Depth 2, Min-Max"
     gen_label = f"Gen{args.gen} ({system_label})"
     mode_str = "S_n(x) [α=1.0: 最新対局のみ]" if is_sn else "Y_n(x) [累計DB]"
     print(f"自己評価を開始します: {gen_label} (評価対象: {mode_str})")

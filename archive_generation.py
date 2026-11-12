@@ -17,14 +17,15 @@ SYSTEM_NAMES = {
     "depth0": "depth0_pure_mse",
     "depth2": "depth2_minmax_mse",
     "d0_rep": "d0_rep_pena_mse",
-    "d0_rep_pena_mse": "d0_rep_pena_mse"
+    "d0_rep_pena_mse": "d0_rep_pena_mse",
+    "d0_six": "d0_six"
 }
 
 
 def main():
     parser = argparse.ArgumentParser(description="各世代の成果物を系統別フォルダにアーカイブ保存")
-    parser.add_argument("--system", type=str, required=True, choices=["depth0", "depth2", "d0_rep", "d0_rep_pena_mse"],
-                        help="実験系統: depth0, depth2, d0_rep (d0_rep_pena_mse)")
+    parser.add_argument("--system", type=str, required=True, choices=["depth0", "depth2", "d0_rep", "d0_rep_pena_mse", "d0_six"],
+                        help="実験系統: depth0, depth2, d0_rep, d0_six")
     parser.add_argument("--gen", type=int, required=True, help="世代番号 (0, 1, 2, ...)")
     parser.add_argument("--init_folders_only", action="store_true", help="フォルダ構造の初期作成のみ行う")
     args = parser.parse_args()

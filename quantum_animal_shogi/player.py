@@ -209,7 +209,8 @@ class ModelPlayer(BasePlayer):
                 # 深さ0: 相手視点の次盤面をバッチ推論
                 vectors = [state2vec(nb, opponent_id) for _, nb in next_boards]
                 batch_x = np.array(vectors, dtype=np.float32)
-                preds = self.model.predict(batch_x, verbose=0).flatten()
+                # predict() はオーバーヘッドが極めて大きいため直接モデルを呼び出す
+                preds = self.model(batch_x, training=False).numpy().flatten()
 
                 for (orig_idx, _), pred in zip(next_boards, preds):
                     # 予測値は相手手番目線なので符号反転（または 1 - p）
@@ -244,7 +245,8 @@ class ModelPlayer(BasePlayer):
                     # 相手の合法手のうち、自分にとって最悪の手（相手にとって最善）
                     if opp_next_boards:
                         opp_vecs = [state2vec(onb, self.player_id) for onb in opp_next_boards]
-                        opp_preds = self.model.predict(np.array(opp_vecs, dtype=np.float32), verbose=0).flatten()
+                        batch_opp = np.array(opp_vecs, dtype=np.float32)
+                        opp_preds = self.model(batch_opp, training=False).numpy().flatten()
                         # opp_preds は自分手番目線
                         move_evals[orig_idx] = np.min(opp_preds)
                     else:
