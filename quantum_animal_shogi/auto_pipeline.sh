@@ -14,6 +14,12 @@ GEN=$1
 PREV_GEN=$((GEN - 1))
 PREV_MODEL="quantum_model_gen${PREV_GEN}.keras"
 
+# 直前モデルがルートになくアーカイブにあればコピー
+if [ ! -f "$PREV_MODEL" ] && [ -f "experiments/quantum_d0/gen${PREV_GEN}/$PREV_MODEL" ]; then
+    echo "直前世代モデルをアーカイブから復元します: experiments/quantum_d0/gen${PREV_GEN}/$PREV_MODEL"
+    cp "experiments/quantum_d0/gen${PREV_GEN}/$PREV_MODEL" .
+fi
+
 echo "=========================================================="
 echo "★ Gen${GEN} の全自動学習パイプラインを開始します"
 echo "基準モデル: ${PREV_MODEL}"
