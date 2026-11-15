@@ -30,20 +30,19 @@ def create_model():
 
 def get_data(data_path="train_data.npy"):
     print(f"データセットをロードしています: {data_path} ...")
-    dataset = np.load(data_path)
-
-    # 0〜138列目: 状態ベクトル (139次元)
-    X = dataset[:, :139].astype(np.float32)
-    # 139列目: 評価値 (-1.0〜1.0)
-    y = dataset[:, 139].astype(np.float32)
+    # メモリマップ (mmap_mode='r') でロードし、メモリ消費を激減させる
+    dataset = np.load(data_path, mmap_mode='r')
+    num_samples = len(dataset)
 
     # シャッフルして 8:2 に分割
-    indices = np.random.permutation(len(X))
-    split_idx = int(len(X) * 0.8)
+    indices = np.random.permutation(num_samples)
+    split_idx = int(num_samples * 0.8)
     train_idx, test_idx = indices[:split_idx], indices[split_idx:]
 
-    X_train, y_train = X[train_idx], y[train_idx]
-    X_test, y_test = X[test_idx], y[test_idx]
+    X_train = np.array(dataset[train_idx, :139], dtype=np.float32)
+    y_train = np.array(dataset[train_idx, 139], dtype=np.float32)
+    X_test = np.array(dataset[test_idx, :139], dtype=np.float32)
+    y_test = np.array(dataset[test_idx, 139], dtype=np.float32)
 
     print(f"学習データ数: {X_train.shape[0]}")
     print(f"テストデータ数: {X_test.shape[0]}")

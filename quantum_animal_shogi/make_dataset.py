@@ -83,6 +83,14 @@ def main():
     np.save("train_data.npy", dataset)
     print(f"train_data.npy を保存しました (形状: {dataset.shape})")
 
+    # 大規模配列のメモリを即時完全解放
+    del dataset
+    del cumulative_data
+    if 'current_gen_data' in locals():
+        del current_gen_data
+    import gc
+    gc.collect()
+
     # 対局ログ (match_log_*.pkl) の集約と統計保存
     if log_files:
         print(f"\n対局ログ {len(log_files)} 個を集約中...")
