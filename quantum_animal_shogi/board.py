@@ -93,15 +93,11 @@ class QuantumBoard:
 
     def can_be_lion(self, owner, piece_id):
         """その駒がライオンであり得るか"""
-        if self.promoted.get((owner, piece_id), False):
-            return False  # ニワトリになっている場合はライオンではない
         perms = self.valid_perms[owner]
         return any(ALL_PERMUTATIONS[idx][piece_id] == PIECE_LION for idx in perms)
 
     def is_determined_lion(self, owner, piece_id):
         """その駒が100%ライオンに確定しているか"""
-        if self.promoted.get((owner, piece_id), False):
-            return False
         perms = self.valid_perms[owner]
         if not perms:
             return False

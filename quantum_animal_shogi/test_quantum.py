@@ -74,14 +74,19 @@ def test_auto_try():
     board = QuantumBoard()
     board.setup()
 
-    # 先手の駒 pid=1 を敵陣最奥 (0, 0) にワープ配置（テスト用）
-    board.set(0, 0, (PLAYER_1, PLAYER_1, 1))
-    # 後手の駒をすべて取れる手がない位置（あるいは後手の手駒を空にする）
-    # 後手の (0, 0) 周辺の駒を取り除く
+    # 後手の駒をすべて取れる手がない位置（周辺の駒を取り除く）
     board.remove(1, 0)
     board.remove(2, 0)
-    board.remove(0, 1) # 空き
     board.remove(1, 1)
+
+    # 先手 pid=0 を (0, 1) に配置し、(0, 0) へ make_move で移動させる
+    board.remove(0, 3)
+    board.set(0, 1, (PLAYER_1, PLAYER_1, 0))
+    m = Move((0, 1), (0, 0), (PLAYER_1, 0), is_drop=False)
+    GameEngine.make_move(board, m, PLAYER_1)
+
+    assert board.promoted.get((PLAYER_1, 0)) == True, "最奥移動で promoted フラグが True になるべき"
+    assert board.can_be_lion(PLAYER_1, 0), "最奥移動後も can_be_lion が True であるべき（バグ修正の検証）"
 
     # 後手が (0, 0) を取れないかチェック
     can_capture = GameEngine.can_capture_target(board, PLAYER_2, (0, 0))
@@ -89,7 +94,7 @@ def test_auto_try():
     winner = GameEngine.check_winner(board)
     print(f"勝者判定結果: {winner}")
     assert winner == PLAYER_1, "次手で取られないため先手のトライ勝ちになるべき"
-    print("自動トライ判定OK")
+    print("自動トライ判定OK (make_move経由でのトライ勝利・can_be_lion維持を確認)")
 
 def test_giraffe_backward_and_drop_rules():
     print("\n--- テスト6: キリンの後退と最奥打ち（案A） ---")

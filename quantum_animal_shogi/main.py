@@ -192,7 +192,7 @@ def run_simulation(yaml_path):
             data_dict[b_key][1] += step_eval
 
         if (g + 1) % 100 == 0 or (g + 1) == games:
-            print(f"[{os.path.basename(yaml_path)}] 進捗: {g + 1}/{games} 局完了 (P1: {p1_wins}, P2: {p2_wins}, 引分: {draws})")
+            print(f"[{os.path.basename(yaml_path)}] 進捗: {g + 1}/{games} 局完了 (P1: {p1_wins}, P2: {p2_wins}, 引分: {draws})", flush=True)
 
     # 成果物の保存
     output_filename = f"output{seed:03d}.pkl"
