@@ -138,7 +138,7 @@ def run_simulation(yaml_path):
             GameEngine.make_move(board, move, current_p)
             game_moves += 1
 
-            winner, reason = GameEngine.check_winner_detail(board)
+            winner, reason = GameEngine.check_winner_detail(board, last_player=current_p)
             if winner is not None:
                 win_reason = reason
                 break

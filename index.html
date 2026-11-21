@@ -204,10 +204,6 @@
     font-weight: 700;
   }
 
-  .piece-char.promoted {
-    /* 他の駒と同じ色を維持 */
-  }
-
   /* 持ち駒の駒サイズ */
   .hand-pieces .piece {
     width: calc(var(--cell-size) * 0.72);
@@ -673,21 +669,6 @@ class GameState {
       if (cell && cell.controller === opp && this.canBeLion(cell.owner, cell.pid)) {
         this.winner = opp;
         return;
-      }
-    }
-
-    // 3. トライ判定 (B): 即時判定（ショートカット）
-    // lastMovePlayer の駒が敵陣最奥にいて、相手(opp)が次手でこの駒を取る合法手が0個なら即勝ち
-    const myTargetRow = (lastMovePlayer === P1) ? 0 : ROWS - 1;
-    for (let c = 0; c < COLS; c++) {
-      const cell = this.grid[myTargetRow][c];
-      if (cell && cell.controller === lastMovePlayer && this.canBeLion(cell.owner, cell.pid)) {
-        const oppMoves = this.getLegalMoves(opp);
-        const canCatch = oppMoves.some(m => m.to[0] === c && m.to[1] === myTargetRow);
-        if (!canCatch) {
-          this.winner = lastMovePlayer;
-          return;
-        }
       }
     }
   }

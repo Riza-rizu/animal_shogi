@@ -78,7 +78,7 @@ def run_match_block(p1_player, p2_player, p1_label, p2_label, num_games=500, sta
             next_state_key = (board.to_hashable(), 3 - current_p)
             state_counts[next_state_key] += 1
 
-            winner, reason = GameEngine.check_winner_detail(board)
+            winner, reason = GameEngine.check_winner_detail(board, last_player=current_p)
             if winner is not None:
                 win_reason = reason
                 break

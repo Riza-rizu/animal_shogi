@@ -152,6 +152,7 @@ class GameEngine:
 
             board.set(move.to_pos[0], move.to_pos[1], (player, owner, pid))
 
+        board.last_player = player
         return captured_token
 
     @staticmethod
@@ -164,74 +165,66 @@ class GameEngine:
         return False
 
     @staticmethod
-    def check_winner(board):
+    def check_winner(board, last_player=None):
         """
         勝敗を判定する。継続なら None、勝者が決まれば PLAYER_1 または PLAYER_2 を返す。
+        【正規ルール・案A準拠】
+        1. キャッチ判定（最優先）:
+           ライオンである可能性が残っている駒が相手陣営に1つもなければ相手の負け（直前手番側の勝ち）
+        2. 公式トライ判定（相手の手番が終了した時点で判定）:
+           直前手番 last_player が手を指し終えた時点で、相手 (3 - last_player) のライオン候補駒が
+           敵陣最奥列に存在し続けている場合、相手がその駒を取らずにターンを終了したため、
+           相手 (3 - last_player) のトライ勝ち！
         """
-        # 1. キャッチ判定:
-        # ライオンである可能性が残っている駒が相手陣営に1つもなければ相手の負け
+        # 1. キャッチ判定（最優先）
         p1_has_lion = any(board.can_be_lion(PLAYER_1, pid) for pid in range(4))
         p2_has_lion = any(board.can_be_lion(PLAYER_2, pid) for pid in range(4))
 
         if not p1_has_lion and not p2_has_lion:
-            return None  # 通常あり得ない
+            return None
         if not p1_has_lion:
             return PLAYER_2  # 先手のライオンが消滅（後手の勝ち）
         if not p2_has_lion:
             return PLAYER_1  # 後手のライオンが消滅（先手の勝ち）
 
-        # 2. 自動トライルールの判定
-        # 先手(PLAYER_1)の駒が最奥(row=0)にいる場合
-        for c in range(COLS):
-            cell = board.get(c, 0)
-            if cell is not None:
-                ctrl, owner, pid = cell
-                if ctrl == PLAYER_1 and board.can_be_lion(owner, pid):
-                    # 後手(PLAYER_2)が次の1手でこの駒を取れないなら、先手のトライ勝ち！
-                    if not GameEngine.can_capture_target(board, PLAYER_2, (c, 0)):
-                        return PLAYER_1
-
-        # 後手(PLAYER_2)の駒が最奥(row=ROWS-1)にいる場合
-        for c in range(COLS):
-            cell = board.get(c, ROWS - 1)
-            if cell is not None:
-                ctrl, owner, pid = cell
-                if ctrl == PLAYER_2 and board.can_be_lion(owner, pid):
-                    # 先手(PLAYER_1)が次の1手でこの駒を取れないなら、後手のトライ勝ち！
-                    if not GameEngine.can_capture_target(board, PLAYER_1, (c, ROWS - 1)):
-                        return PLAYER_2
+        # 2. 公式トライ判定（相手の手番が終了した時点で生き残っているか判定）
+        lp = last_player if last_player is not None else getattr(board, 'last_player', None)
+        if lp is not None:
+            waiting_player = 3 - lp
+            target_row = 0 if waiting_player == PLAYER_1 else (ROWS - 1)
+            for c in range(COLS):
+                cell = board.get(c, target_row)
+                if cell is not None:
+                    ctrl, owner, pid = cell
+                    if ctrl == waiting_player and board.can_be_lion(owner, pid):
+                        return waiting_player
 
         return None
 
     @staticmethod
-    def check_winner_detail(board):
+    def check_winner_detail(board, last_player=None):
         """
         勝敗と勝因をタプル (winner, reason) で返す。
         継続なら (None, None)
-        reason: 'Catch', 'Try', 'Extinction'
+        reason: 'Catch', 'Try'
         """
         p1_has_lion = any(board.can_be_lion(PLAYER_1, pid) for pid in range(4))
         p2_has_lion = any(board.can_be_lion(PLAYER_2, pid) for pid in range(4))
 
         if not p1_has_lion:
-            return PLAYER_2, "Extinction"
+            return PLAYER_2, "Catch"
         if not p2_has_lion:
-            return PLAYER_1, "Extinction"
+            return PLAYER_1, "Catch"
 
-        for c in range(COLS):
-            cell = board.get(c, 0)
-            if cell is not None:
-                ctrl, owner, pid = cell
-                if ctrl == PLAYER_1 and board.can_be_lion(owner, pid):
-                    if not GameEngine.can_capture_target(board, PLAYER_2, (c, 0)):
-                        return PLAYER_1, "Try"
-
-        for c in range(COLS):
-            cell = board.get(c, ROWS - 1)
-            if cell is not None:
-                ctrl, owner, pid = cell
-                if ctrl == PLAYER_2 and board.can_be_lion(owner, pid):
-                    if not GameEngine.can_capture_target(board, PLAYER_1, (c, ROWS - 1)):
-                        return PLAYER_2, "Try"
+        lp = last_player if last_player is not None else getattr(board, 'last_player', None)
+        if lp is not None:
+            waiting_player = 3 - lp
+            target_row = 0 if waiting_player == PLAYER_1 else (ROWS - 1)
+            for c in range(COLS):
+                cell = board.get(c, target_row)
+                if cell is not None:
+                    ctrl, owner, pid = cell
+                    if ctrl == waiting_player and board.can_be_lion(owner, pid):
+                        return waiting_player, "Try"
 
         return None, None

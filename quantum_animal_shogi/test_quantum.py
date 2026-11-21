@@ -69,32 +69,47 @@ def test_state_vector():
     assert vec.shape == (139,), f"139次元であるべき (実際: {vec.shape})"
     print("状態ベクトル次元OK")
 
-def test_auto_try():
-    print("\n--- テスト5: 自動トライ判定 ---")
+def test_plan_a_official_try():
+    print("\n--- テスト5: 公式トライルール（案A）とキャッチ最優先の検証 ---")
     board = QuantumBoard()
     board.setup()
-
-    # 後手の駒をすべて取れる手がない位置（周辺の駒を取り除く）
-    board.remove(1, 0)
-    board.remove(2, 0)
-    board.remove(1, 1)
-
-    # 先手 pid=0 を (0, 1) に配置し、(0, 0) へ make_move で移動させる
     board.remove(0, 3)
     board.set(0, 1, (PLAYER_1, PLAYER_1, 0))
-    m = Move((0, 1), (0, 0), (PLAYER_1, 0), is_drop=False)
-    GameEngine.make_move(board, m, PLAYER_1)
+    m_p1 = Move((0, 1), (0, 0), (PLAYER_1, 0), is_drop=False)
+    GameEngine.make_move(board, m_p1, PLAYER_1)
 
     assert board.promoted.get((PLAYER_1, 0)) == True, "最奥移動で promoted フラグが True になるべき"
-    assert board.can_be_lion(PLAYER_1, 0), "最奥移動後も can_be_lion が True であるべき（バグ修正の検証）"
+    assert board.can_be_lion(PLAYER_1, 0), "最奥移動後も can_be_lion が True であるべき"
 
-    # 後手が (0, 0) を取れないかチェック
-    can_capture = GameEngine.can_capture_target(board, PLAYER_2, (0, 0))
-    print(f"後手が (0, 0) を取れるか: {can_capture}")
-    winner = GameEngine.check_winner(board)
-    print(f"勝者判定結果: {winner}")
-    assert winner == PLAYER_1, "次手で取られないため先手のトライ勝ちになるべき"
-    print("自動トライ判定OK (make_move経由でのトライ勝利・can_be_lion維持を確認)")
+    # 1. 先手が最奥に侵入した瞬間は勝敗がつかず、後手に手番が渡る
+    w_immediate = GameEngine.check_winner(board, last_player=PLAYER_1)
+    print(f"1. 最奥到達直後の勝敗判定: {w_immediate} (期待値: None)")
+    assert w_immediate is None, "最奥に入った瞬間は即時勝利せず、後手に手番を渡すべき（案A）"
+
+    # 2. 【最重要】後手が先手のライオンをキャッチした場合、キャッチ勝ちが最優先される
+    board_catch = board.copy()
+    board_catch.valid_perms[PLAYER_1] = []  # 先手ライオン消滅（捕獲）
+    w_catch, reason_catch = GameEngine.check_winner_detail(board_catch, last_player=PLAYER_2)
+    print(f"2. 後手がキャッチした場合の判定: winner={w_catch}, reason={reason_catch} (期待値: 2, Catch)")
+    assert w_catch == PLAYER_2 and reason_catch == "Catch", "相手がライオンを捕獲した場合はトライよりキャッチ勝ちが優先されるべき"
+
+    # 3. 後手が最奥の駒を取った場合、トライは阻止され継続
+    board_prevent = board.copy()
+    m_take = Move((1, 0), (0, 0), (PLAYER_2, 1), is_drop=False)
+    GameEngine.make_move(board_prevent, m_take, PLAYER_2)
+    w_prevent = GameEngine.check_winner(board_prevent, last_player=PLAYER_2)
+    print(f"3. 後手が最奥駒を取った場合の判定: {w_prevent} (期待値: None)")
+    assert w_prevent is None, "最奥駒が取られたらトライ阻止でゲーム継続すべき"
+
+    # 4. 後手が別の手を指してターン終了した場合、先手のトライ勝ちが成立
+    board_success = board.copy()
+    board_success.remove(1, 1)  # 空きマスにする
+    m_ignore = Move((1, 0), (1, 1), (PLAYER_2, 1), is_drop=False)
+    GameEngine.make_move(board_success, m_ignore, PLAYER_2)
+    w_success, reason_success = GameEngine.check_winner_detail(board_success, last_player=PLAYER_2)
+    print(f"4. 後手が最奥駒を取らず手番終了した場合の判定: winner={w_success}, reason={reason_success} (期待値: 1, Try)")
+    assert w_success == PLAYER_1 and reason_success == "Try", "1手生き残ったため先手のトライ勝ちになるべき"
+    print("公式トライ判定（案A・キャッチ最優先）の全挙動テストOK！")
 
 def test_giraffe_backward_and_drop_rules():
     print("\n--- テスト6: キリンの後退と最奥打ち（案A） ---")
@@ -135,7 +150,7 @@ if __name__ == "__main__":
     test_move_and_collapse()
     test_capture_excludes_lion()
     test_state_vector()
-    test_auto_try()
+    test_plan_a_official_try()
     test_giraffe_backward_and_drop_rules()
     print("\n全テスト成功！")
 

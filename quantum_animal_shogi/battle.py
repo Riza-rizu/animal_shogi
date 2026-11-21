@@ -67,7 +67,7 @@ def play_single_game(p1, p2, max_moves=200, gamma=0.6, collect_data=False):
         GameEngine.make_move(board, move, current_p)
         game_moves += 1
 
-        winner = GameEngine.check_winner(board)
+        winner = GameEngine.check_winner(board, last_player=current_p)
         if winner is not None:
             break
 

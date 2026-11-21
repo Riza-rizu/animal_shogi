@@ -39,6 +39,8 @@ class QuantumBoard:
             for pid in range(4):
                 self.promoted[(p, pid)] = False
 
+        self.last_player = None
+
     def setup(self):
         """初期配置の設定"""
         self.grid = [[None] * COLS for _ in range(ROWS)]
@@ -184,6 +186,7 @@ class QuantumBoard:
             new_b.hands[p] = list(self.hands[p])
             new_b.valid_perms[p] = list(self.valid_perms[p])
         new_b.promoted = dict(self.promoted)
+        new_b.last_player = self.last_player
         return new_b
 
     # ---- シリアライズ（千日手・レピティション判定用） ----
