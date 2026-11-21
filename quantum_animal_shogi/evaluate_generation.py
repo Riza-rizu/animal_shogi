@@ -147,6 +147,96 @@ def plot_scatter(gen_label, y_true, y_pred, metrics, output_filename, is_sn=Fals
     plt.close()
 
 
+def plot_moves_distribution(gen_num, out_dir="."):
+    """手数の出現頻度棒グラフをプロットして保存"""
+    player_gen = gen_num - 1
+    moves = None
+
+    # 1. match_replay npz からの読み込み (超高速)
+    npz_candidates = [
+        f"match_replay_gen{player_gen}.npz",
+        "match_replay.npz",
+        os.path.join(out_dir, f"match_replay_gen{player_gen}.npz"),
+        os.path.join(out_dir, "match_replay.npz")
+    ]
+    for npz_path in npz_candidates:
+        if os.path.exists(npz_path):
+            try:
+                data = np.load(npz_path)
+                if 'games_ptr' in data:
+                    moves = np.diff(data['games_ptr'])
+                    break
+            except Exception:
+                pass
+
+    # 2. CSV からの読み込み (フォールバック)
+    if moves is None:
+        csv_candidates = [
+            f"match_summary_1million_games_gen{player_gen}.csv",
+            "match_summary.csv",
+            f"match_log_1million_games_gen{player_gen}.csv",
+            os.path.join(out_dir, f"match_summary_1million_games_gen{player_gen}.csv"),
+            os.path.join(out_dir, f"match_log_1million_games_gen{player_gen}.csv")
+        ]
+        import csv
+        for csv_path in csv_candidates:
+            if os.path.exists(csv_path):
+                try:
+                    moves_list = []
+                    with open(csv_path, 'r', encoding='utf-8') as f:
+                        reader = csv.reader(f)
+                        header = next(reader)
+                        col_idx = 2 if len(header) > 2 and header[2] == 'moves' else -1
+                        if col_idx == -1:
+                            for idx, h in enumerate(header):
+                                if h == 'moves':
+                                    col_idx = idx
+                                    break
+                        if col_idx != -1:
+                            for row in reader:
+                                if row and len(row) > col_idx:
+                                    moves_list.append(int(row[col_idx]))
+                    if moves_list:
+                        moves = np.array(moves_list, dtype=np.int32)
+                        break
+                except Exception:
+                    pass
+
+    if moves is None or len(moves) == 0:
+        print("  [SKIP] 手数分布データが見つからないため棒グラフをスキップします。")
+        return
+
+    avg_m = float(np.mean(moves))
+    min_m = int(np.min(moves))
+    max_m = int(np.max(moves))
+
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    counts, _ = np.histogram(moves, bins=np.arange(min_m, max_m + 2) - 0.5)
+    bin_centers = np.arange(min_m, max_m + 1)
+
+    ax.bar(bin_centers, counts, width=0.8, color='#3498db', edgecolor='#2980b9', alpha=0.85, zorder=3)
+    ax.axvline(avg_m, color='#e74c3c', linestyle='--', linewidth=2, zorder=4)
+
+    ax.set_title(f'[Gen{gen_num}] Move Count Distribution (Self-Play)', fontsize=14, fontweight='bold', pad=15)
+    ax.set_xlabel('Moves', fontsize=12, fontweight='bold')
+    ax.set_ylabel('Game Count', fontsize=12, fontweight='bold')
+    ax.grid(axis='y', linestyle='--', alpha=0.6, zorder=0)
+
+    # 右上に Avg: ○○ moves を表示
+    ax.text(0.96, 0.94, f'Avg: {avg_m:.1f} moves', transform=ax.transAxes,
+            fontsize=13, fontweight='bold', color='#2c3e50',
+            horizontalalignment='right', verticalalignment='top',
+            bbox=dict(boxstyle='round,pad=0.5', facecolor='#ffffff', edgecolor='#bdc3c7', alpha=0.95))
+
+    plt.tight_layout()
+    out_img_gen = os.path.join(out_dir, f"moves_distribution_gen{gen_num}.png")
+    out_img_common = os.path.join(out_dir, "moves_distribution.png")
+    plt.savefig(out_img_gen, dpi=200)
+    plt.savefig(out_img_common, dpi=200)
+    plt.close()
+    print(f"  [SAVED] {out_img_gen}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="世代自己評価スクリプト (第6期完全準拠)")
     parser.add_argument("--gen", type=int, required=True, help="世代番号 (例: 1, 2, ...)")
@@ -223,6 +313,9 @@ def main():
     # 散布図描画 (第6期完全同一フォーマット)
     plot_scatter(gen_label, y_sample, y_pred, metrics, out_img, is_sn=False)
     print(f"  [SAVED] {out_img}")
+
+    # 手数分布棒グラフの描画
+    plot_moves_distribution(args.gen, args.out_dir)
 
 
 if __name__ == "__main__":

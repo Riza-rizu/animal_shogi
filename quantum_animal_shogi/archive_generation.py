@@ -51,6 +51,7 @@ def main():
         ([f"match_replay_gen{player_gen}.npz", "match_replay.npz"], f"match_replay_gen{player_gen}.npz"),
         ([f"match_stats_gen{player_gen}.json", "match_stats.json"], f"match_stats_gen{player_gen}.json"),
         (["scatter_evaluation.png"], "scatter_evaluation.png"),
+        ([f"moves_distribution_gen{args.gen}.png", "moves_distribution.png"], f"moves_distribution_gen{args.gen}.png"),
         (["metrics.json"], "metrics.json"),
         (["training_history.json"], "training_history.json")
     ]
