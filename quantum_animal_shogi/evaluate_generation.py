@@ -317,6 +317,32 @@ def main():
     # 手数分布棒グラフの描画
     plot_moves_distribution(args.gen, args.out_dir)
 
+    # 情報エントロピー減衰曲線の解析・描画
+    try:
+        from analyze_entropy import calculate_entropy_trajectory, plot_single_entropy
+        player_gen = args.gen - 1
+        npz_candidates = [
+            f"match_replay_gen{player_gen}.npz",
+            "match_replay.npz",
+            os.path.join(args.out_dir, f"match_replay_gen{player_gen}.npz"),
+            os.path.join(args.out_dir, "match_replay.npz")
+        ]
+        target_npz = None
+        for c in npz_candidates:
+            if os.path.exists(c):
+                target_npz = c
+                break
+        if target_npz:
+            plies, mean_piece, mean_lion, ent_stats = calculate_entropy_trajectory(target_npz)
+            out_ent_png = os.path.join(args.out_dir, f"entropy_decay_curve_gen{args.gen}.png")
+            out_ent_json = os.path.join(args.out_dir, f"entropy_metrics_gen{args.gen}.json")
+            plot_single_entropy(plies, mean_piece, mean_lion, f"Gen{args.gen}", out_ent_png)
+            with open(out_ent_json, "w", encoding="utf-8") as f:
+                json.dump(ent_stats, f, indent=2)
+            print(f"  [SAVED] {out_ent_json}")
+    except Exception as e:
+        print(f"  [SKIP] エントロピー解析スキップ: {e}")
+
 
 if __name__ == "__main__":
     main()

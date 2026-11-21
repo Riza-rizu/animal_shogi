@@ -52,6 +52,8 @@ def main():
         ([f"match_stats_gen{player_gen}.json", "match_stats.json"], f"match_stats_gen{player_gen}.json"),
         (["scatter_evaluation.png"], "scatter_evaluation.png"),
         ([f"moves_distribution_gen{args.gen}.png", "moves_distribution.png"], f"moves_distribution_gen{args.gen}.png"),
+        ([f"entropy_decay_curve_gen{args.gen}.png", "entropy_decay_curve.png"], f"entropy_decay_curve_gen{args.gen}.png"),
+        ([f"entropy_metrics_gen{args.gen}.json", "entropy_metrics.json"], f"entropy_metrics_gen{args.gen}.json"),
         (["metrics.json"], "metrics.json"),
         (["training_history.json"], "training_history.json")
     ]
