@@ -7,6 +7,12 @@
 
 import os
 import sys
+
+# CPU実行を強制
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 import json
 import argparse
 import numpy as np
@@ -284,13 +290,18 @@ def main():
     gen_label = f"Gen{args.gen} ({system_label})"
     print(f"自己評価を開始します: {gen_label}")
 
-    dataset = np.load(args.data)
-    X_all = dataset[:, :139].astype(np.float32)
-    y_all = dataset[:, 139].astype(np.float32)
+    # メモリマップ (mmap_mode='r') でロードし、メモリ消費を激減させる
+    dataset = np.load(args.data, mmap_mode='r')
+    y_all = np.array(dataset[:, 139], dtype=np.float32)
 
-    sample_indices = sample_uniform_by_bins(X_all, y_all, n_bins=20, n_samples_per_bin=100)
-    X_sample = X_all[sample_indices]
+    sample_indices = sample_uniform_by_bins(None, y_all, n_bins=20, n_samples_per_bin=100)
+    X_sample = np.array(dataset[sample_indices, :139], dtype=np.float32)
     y_sample = y_all[sample_indices]
+
+    del dataset
+    del y_all
+    import gc
+    gc.collect()
 
     model = tf.keras.models.load_model(args.model)
     y_pred = model(X_sample, training=False).numpy().flatten()

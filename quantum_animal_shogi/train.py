@@ -7,6 +7,12 @@ import sys
 import json
 import argparse
 import numpy as np
+
+# CPU実行を強制してGPUドライバエラーおよび無駄なメモリ確保を抑制
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
 from tensorflow import keras
 
 def create_model():
@@ -28,14 +34,20 @@ def create_model():
     return model
 
 
-def get_data(data_path="train_data.npy"):
+def get_data(data_path="train_data.npy", max_samples=2000000):
     print(f"データセットをロードしています: {data_path} ...")
-    # メモリマップ (mmap_mode='r') でロードし、メモリ消費を激減させる
+    # メモリマップ (mmap_mode='r') でロード
     dataset = np.load(data_path, mmap_mode='r')
     num_samples = len(dataset)
+    print(f"データセット総局面数: {num_samples:,}")
+
+    indices = np.random.permutation(num_samples)
+    if max_samples is not None and max_samples > 0 and num_samples > max_samples:
+        print(f"メモリ制約のため、全 {num_samples:,} 局面からランダムに {max_samples:,} 局面を均等サンプリングします...")
+        indices = indices[:max_samples]
+        num_samples = max_samples
 
     # シャッフルして 8:2 に分割
-    indices = np.random.permutation(num_samples)
     split_idx = int(num_samples * 0.8)
     train_idx, test_idx = indices[:split_idx], indices[split_idx:]
 
@@ -44,8 +56,14 @@ def get_data(data_path="train_data.npy"):
     X_test = np.array(dataset[test_idx, :139], dtype=np.float32)
     y_test = np.array(dataset[test_idx, 139], dtype=np.float32)
 
-    print(f"学習データ数: {X_train.shape[0]}")
-    print(f"テストデータ数: {X_test.shape[0]}")
+    # メモリマップおよびインデックス配列を即時解放
+    del dataset
+    del indices
+    import gc
+    gc.collect()
+
+    print(f"学習データ数: {X_train.shape[0]:,}")
+    print(f"テストデータ数: {X_test.shape[0]:,}")
     return X_train, y_train, X_test, y_test
 
 
@@ -56,6 +74,7 @@ def main():
     parser.add_argument("--data", type=str, default="train_data.npy", help="学習データファイル名")
     parser.add_argument("--epochs", type=int, default=10, help="エポック数")
     parser.add_argument("--batch_size", type=int, default=256, help="バッチサイズ")
+    parser.add_argument("--max_samples", type=int, default=2000000, help="学習に使用する最大サンプル数 (デフォルト: 200万)")
     args = parser.parse_args()
 
     if args.init:
@@ -71,7 +90,7 @@ def main():
         print(f"エラー: 学習データファイル '{args.data}' が見つかりません。")
         return
 
-    X_train, y_train, X_test, y_test = get_data(args.data)
+    X_train, y_train, X_test, y_test = get_data(args.data, max_samples=args.max_samples)
 
     # 2. モデル作成
     model = create_model()

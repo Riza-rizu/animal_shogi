@@ -24,10 +24,11 @@ echo "=========================================================="
 
 cd ~/github/animal_shogi/quantum_animal_shogi
 source ../.venv/bin/activate
+set -e
 
-# 1. Gen1 モデルの学習 (batch_size 256)
+# 1. Gen1 モデルの学習 (batch_size 256, max_samples 200万)
 echo -e "\n[ステップ 1/3] train.py で Gen1 モデルの学習を実行中..."
-python -u train.py --data train_data.npy --output quantum_model_gen1.keras --epochs 6 --batch_size 256
+python -u train.py --data train_data.npy --output quantum_model_gen1.keras --epochs 6 --batch_size 256 --max_samples 2000000
 
 # 2. 評価散布図と指標の作成（約10秒）
 echo -e "\n[ステップ 2/3] evaluate_generation.py で自己評価を実行中..."
