@@ -48,7 +48,7 @@ echo ">> 100万局の自己対局がすべて完了しました！"
 # -------------------------------------------------------------
 echo "[ステップ 3/4] データ集約・学習・評価・アーカイブを実行中..."
 python -u make_dataset.py --gen $GEN && \
-python -u train.py --data train_data.npy --output quantum_model_gen${GEN}.keras --epochs 6 --batch_size 256 --max_samples 2000000 && \
+python -u train.py --data train_data.npy --output quantum_model_gen${GEN}.keras --epochs 6 --batch_size 256 && \
 python -u evaluate_generation.py --model quantum_model_gen${GEN}.keras --gen $GEN && \
 python -u archive_generation.py --gen $GEN
 

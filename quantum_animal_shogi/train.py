@@ -34,37 +34,37 @@ def create_model():
     return model
 
 
-def get_data(data_path="train_data.npy", max_samples=2000000):
+def get_data(data_path="train_data.npy", n_val=10000):
     print(f"データセットをロードしています: {data_path} ...")
     # メモリマップ (mmap_mode='r') でロード
     dataset = np.load(data_path, mmap_mode='r')
     num_samples = len(dataset)
     print(f"データセット総局面数: {num_samples:,}")
 
+    # シャッフルしたインデックスを作成
     indices = np.random.permutation(num_samples)
-    if max_samples is not None and max_samples > 0 and num_samples > max_samples:
-        print(f"メモリ制約のため、全 {num_samples:,} 局面からランダムに {max_samples:,} 局面を均等サンプリングします...")
-        indices = indices[:max_samples]
-        num_samples = max_samples
 
-    # シャッフルして 8:2 に分割
-    split_idx = int(num_samples * 0.8)
-    train_idx, test_idx = indices[:split_idx], indices[split_idx:]
+    # 学習監視用（Validation）として極小の参照サンプル（最大1万局面）を抽出
+    val_count = min(n_val, max(100, int(num_samples * 0.01)))
+    val_idx = indices[:val_count]
 
-    X_train = np.array(dataset[train_idx, :139], dtype=np.float32)
-    y_train = np.array(dataset[train_idx, 139], dtype=np.float32)
-    X_test = np.array(dataset[test_idx, :139], dtype=np.float32)
-    y_test = np.array(dataset[test_idx, 139], dtype=np.float32)
+    # 学習データ: 100% すべての局面を学習に投入（探索した局面を一切捨てない）
+    X_train = np.array(dataset[indices, :139], dtype=np.float32)
+    y_train = np.array(dataset[indices, 139], dtype=np.float32)
+
+    X_val = np.array(dataset[val_idx, :139], dtype=np.float32)
+    y_val = np.array(dataset[val_idx, 139], dtype=np.float32)
 
     # メモリマップおよびインデックス配列を即時解放
     del dataset
     del indices
+    del val_idx
     import gc
     gc.collect()
 
-    print(f"学習データ数: {X_train.shape[0]:,}")
-    print(f"テストデータ数: {X_test.shape[0]:,}")
-    return X_train, y_train, X_test, y_test
+    print(f"学習データ数: {X_train.shape[0]:,} (全データ 100% を投入)")
+    print(f"学習監視用データ数: {X_val.shape[0]:,} (極小参照サンプル)")
+    return X_train, y_train, X_val, y_val
 
 
 def main():
@@ -74,7 +74,7 @@ def main():
     parser.add_argument("--data", type=str, default="train_data.npy", help="学習データファイル名")
     parser.add_argument("--epochs", type=int, default=10, help="エポック数")
     parser.add_argument("--batch_size", type=int, default=256, help="バッチサイズ")
-    parser.add_argument("--max_samples", type=int, default=2000000, help="学習に使用する最大サンプル数 (デフォルト: 200万)")
+    parser.add_argument("--n_val", type=int, default=10000, help="学習監視用サンプル数 (デフォルト: 10000)")
     args = parser.parse_args()
 
     if args.init:
@@ -85,31 +85,31 @@ def main():
         print(f"初期モデルを保存しました: {args.output}")
         return
 
-    # 1. データ取得
+    # 1. データ取得 (100% の全データを学習に投入)
     if not os.path.exists(args.data):
         print(f"エラー: 学習データファイル '{args.data}' が見つかりません。")
         return
 
-    X_train, y_train, X_test, y_test = get_data(args.data, max_samples=args.max_samples)
+    X_train, y_train, X_val, y_val = get_data(args.data, n_val=args.n_val)
 
     # 2. モデル作成
     model = create_model()
     model.summary()
 
-    # 3. 学習
+    # 3. 学習 (全局面 100% でパラメータ更新)
     print(f"学習を開始します (エポック数: {args.epochs}, バッチサイズ: {args.batch_size})...")
     history = model.fit(
         X_train, y_train,
         epochs=args.epochs,
         batch_size=args.batch_size,
-        validation_data=(X_test, y_test),
+        validation_data=(X_val, y_val),
         verbose=2
     )
 
-    # 4. 評価
-    test_loss, test_mae = model.evaluate(X_test, y_test, verbose=0)
-    print(f"Test Loss (MSE) = {test_loss:.6f}")
-    print(f"Test MAE = {test_mae:.6f}")
+    # 4. 評価 (監視用サンプルでの損失)
+    test_loss, test_mae = model.evaluate(X_val, y_val, verbose=0)
+    print(f"Validation Loss (MSE) = {test_loss:.6f}")
+    print(f"Validation MAE = {test_mae:.6f}")
 
     # 5. 保存
     model.save(args.output)
