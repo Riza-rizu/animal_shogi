@@ -4,7 +4,6 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=32G
 #SBATCH --time=02:00:00
 #SBATCH --output=job_finish_gen1_%j.log
 #SBATCH --error=job_finish_gen1_%j.log
