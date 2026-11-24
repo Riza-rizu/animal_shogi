@@ -25,6 +25,16 @@ echo "★ Gen${GEN} の全自動学習パイプラインを開始します"
 echo "基準モデル: ${PREV_MODEL}"
 echo "=========================================================="
 
+# Gen1 の場合は新実験系統の開始となるため、過去期の残存ファイルを完全リセット
+if [ "$GEN" -eq 1 ]; then
+    echo "=========================================================="
+    echo "★ Gen1 (新期開始) のため、過去期の蓄積ファイル・旧モデルを完全リセットします"
+    echo "=========================================================="
+    rm -f cumulative_dataset.pkl train_data.npy output*.pkl match_log_*.pkl
+    rm -f quantum_model_gen[1-9]*.keras
+    rm -rf processed_pkl
+fi
+
 # Gen0 が無ければ自動的にランダム初期化して作成
 if [ ! -f "quantum_model_gen0.keras" ]; then
     echo "Gen0 が見つからないため、初期モデルを自動作成します..."
