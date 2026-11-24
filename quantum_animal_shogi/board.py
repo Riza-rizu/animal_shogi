@@ -200,11 +200,11 @@ class QuantumBoard:
         prom_items = tuple(sorted((k, v) for k, v in self.promoted.items() if v))
         return (grid_t, h1, h2, p1_perms, p2_perms, prom_items)
 
-    # ---- テンソル変換（AI学習入力用: 計139次元） ----
+    # ---- テンソル変換（AI学習入力用: 計187次元） ----
 
     def to_state_vector(self, current_player):
         """
-        盤面(132) + 持ち駒(6) + 手番(1) = 139次元のベクトルを出力
+        盤面(132) + 持ち駒(6) + 手番(1) + P1残存順列(24) + P2残存順列(24) = 187次元のベクトルを出力
         """
         # 1. 盤面テンソル (4, 3, 11)
         board_tensor = np.zeros((ROWS, COLS, NUM_PIECE_STATES), dtype=np.float32)
@@ -240,9 +240,18 @@ class QuantumBoard:
         # 3. 手番 (1次元: P2手番なら 1.0, P1なら 0.0)
         turn = np.array([1.0 if current_player == PLAYER_2 else 0.0], dtype=np.float32)
 
-        return np.concatenate([board_flat, hands_vec, turn])
+        # 4. 残存順列ベクトル (先手24次元 + 後手24次元 = 48次元: 生存順列=1.0, 消滅=0.0)
+        p1_perms_vec = np.zeros(24, dtype=np.float32)
+        for idx in self.valid_perms[PLAYER_1]:
+            p1_perms_vec[idx] = 1.0
+
+        p2_perms_vec = np.zeros(24, dtype=np.float32)
+        for idx in self.valid_perms[PLAYER_2]:
+            p2_perms_vec[idx] = 1.0
+
+        return np.concatenate([board_flat, hands_vec, turn, p1_perms_vec, p2_perms_vec])
 
 
 def state2vec(board, current_player_id):
-    """盤面と手番から139次元の状態ベクトルを返す"""
+    """盤面と手番から187次元の状態ベクトルを返す"""
     return board.to_state_vector(current_player_id)

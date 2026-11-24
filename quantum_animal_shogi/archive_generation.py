@@ -10,13 +10,13 @@ import json
 import argparse
 
 EXPERIMENT_ROOT = "experiments"
-SYSTEM_DIR_NAME = "quantum_d0"
+SYSTEM_DIR_NAME = "quantum_d0_perm9"
 
 
 def main():
     parser = argparse.ArgumentParser(description="各世代の成果物を系統別フォルダにアーカイブ保存")
     parser.add_argument("--gen", type=int, required=True, help="世代番号 (0, 1, 2, ...)")
-    parser.add_argument("--system", type=str, default="quantum_d0", help="実験系統名")
+    parser.add_argument("--system", type=str, default="quantum_d0_perm9", help="実験系統名")
     args = parser.parse_args()
 
     target_dir = os.path.join(EXPERIMENT_ROOT, args.system, f"gen{args.gen}")

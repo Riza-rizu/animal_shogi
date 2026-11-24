@@ -67,18 +67,18 @@ def main():
         with open(CUMULATIVE_FILE, 'wb') as f:
             pickle.dump(cumulative_data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-    # train_data.npy の作成 (139次元 + 評価値1次元 = 140次元)
+    # train_data.npy の作成 (187次元 + 評価値1次元 = 188次元)
     print("train_data.npy を構築中...")
     num_samples = len(cumulative_data)
-    dataset = np.zeros((num_samples, 140), dtype=np.float32)
+    dataset = np.zeros((num_samples, 188), dtype=np.float32)
 
     for i, (b_key, (visits, val_sum)) in enumerate(cumulative_data.items()):
-        # bytes から 139次元 float32 ベクトルを復元
+        # bytes から 187次元 float32 ベクトルを復元
         s_vec = np.frombuffer(b_key, dtype=np.float32)
         # 評価値 (平均値) を -1.0 〜 1.0 にクリップ
         avg_eval = float(np.clip(val_sum / visits if visits > 0 else 0.0, -1.0, 1.0))
-        dataset[i, :139] = s_vec
-        dataset[i, 139] = avg_eval
+        dataset[i, :187] = s_vec
+        dataset[i, 187] = avg_eval
 
     np.save("train_data.npy", dataset)
     print(f"train_data.npy を保存しました (形状: {dataset.shape})")

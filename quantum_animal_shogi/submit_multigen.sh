@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=quantum_d0_multigen
+#SBATCH --job-name=quantum_d0_perm9
 #SBATCH --partition=main
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

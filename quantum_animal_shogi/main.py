@@ -22,11 +22,11 @@ from engine import GameEngine
 from player import HumanPlayer, RandomPlayer, ModelPlayer, load_keras_model_safe
 
 
-def to_bytes_key(vec_139):
+def to_bytes_key(vec_state):
     """
-    139次元の float32 ベクトルを bytes 型に変換（辞書キーの省メモリ化）
+    187次元の float32 ベクトルを bytes 型に変換（辞書キーの省メモリ化）
     """
-    return vec_139.astype(np.float32).tobytes()
+    return vec_state.astype(np.float32).tobytes()
 
 
 def run_simulation(yaml_path):

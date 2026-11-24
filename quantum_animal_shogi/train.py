@@ -20,7 +20,7 @@ def create_model():
     全結合型ニューラルネットワーク (MLP: 512 -> 256 -> 1, tanh)
     """
     model = keras.Sequential([
-        keras.layers.Input(shape=(139,), name="state_input"),
+        keras.layers.Input(shape=(187,), name="state_input"),
         keras.layers.Dense(512, activation="relu", name="dense"),
         keras.layers.Dense(256, activation="relu", name="dense_1"),
         keras.layers.Dense(1, activation="tanh", name="eval_value")
@@ -55,12 +55,12 @@ def get_data(data_path="train_data.npy", n_val=10000, max_samples=3000000):
     val_count = min(n_val, max(100, int(len(train_indices) * 0.01)))
     val_idx = train_indices[:val_count]
 
-    # 学習データ投入
-    X_train = np.array(dataset[train_indices, :139], dtype=np.float32)
-    y_train = np.array(dataset[train_indices, 139], dtype=np.float32)
+    # 学習データ投入 (187次元の特徴量 + 1次元の評価値)
+    X_train = np.array(dataset[train_indices, :187], dtype=np.float32)
+    y_train = np.array(dataset[train_indices, 187], dtype=np.float32)
 
-    X_val = np.array(dataset[val_idx, :139], dtype=np.float32)
-    y_val = np.array(dataset[val_idx, 139], dtype=np.float32)
+    X_val = np.array(dataset[val_idx, :187], dtype=np.float32)
+    y_val = np.array(dataset[val_idx, 187], dtype=np.float32)
 
     # メモリマップおよびインデックス配列を即時解放
     del dataset

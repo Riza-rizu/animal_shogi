@@ -246,7 +246,7 @@ def plot_moves_distribution(gen_num, out_dir="."):
 def main():
     parser = argparse.ArgumentParser(description="世代自己評価スクリプト (第6期完全準拠)")
     parser.add_argument("--gen", type=int, required=True, help="世代番号 (例: 1, 2, ...)")
-    parser.add_argument("--system", type=str, default="quantum_d0", help="実験系統名")
+    parser.add_argument("--system", type=str, default="quantum_d0_perm9", help="実験系統名")
     parser.add_argument("--model", type=str, default=None, help="モデルパス")
     parser.add_argument("--data", type=str, default=None, help="教師データパス")
     parser.add_argument("--out_dir", type=str, default=".", help="出力先ディレクトリ")
@@ -286,16 +286,17 @@ def main():
         print(f"エラー: データセットファイルが見つかりません ({args.data})")
         sys.exit(1)
 
-    system_label = "Quantum Depth 0"
+    system_label = "Quantum Depth 0 (Perm9)"
     gen_label = f"Gen{args.gen} ({system_label})"
     print(f"自己評価を開始します: {gen_label}")
 
     # メモリマップ (mmap_mode='r') でロードし、メモリ消費を激減させる
     dataset = np.load(args.data, mmap_mode='r')
-    y_all = np.array(dataset[:, 139], dtype=np.float32)
+    # 最終列が評価値、それ以前の列が特徴量 (187次元)
+    y_all = np.array(dataset[:, -1], dtype=np.float32)
 
     sample_indices = sample_uniform_by_bins(None, y_all, n_bins=20, n_samples_per_bin=100)
-    X_sample = np.array(dataset[sample_indices, :139], dtype=np.float32)
+    X_sample = np.array(dataset[sample_indices, :-1], dtype=np.float32)
     y_sample = y_all[sample_indices]
 
     del dataset

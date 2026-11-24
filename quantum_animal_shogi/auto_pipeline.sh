@@ -15,9 +15,9 @@ PREV_GEN=$((GEN - 1))
 PREV_MODEL="quantum_model_gen${PREV_GEN}.keras"
 
 # 直前モデルがルートになくアーカイブにあればコピー
-if [ ! -f "$PREV_MODEL" ] && [ -f "experiments/quantum_d0/gen${PREV_GEN}/$PREV_MODEL" ]; then
-    echo "直前世代モデルをアーカイブから復元します: experiments/quantum_d0/gen${PREV_GEN}/$PREV_MODEL"
-    cp "experiments/quantum_d0/gen${PREV_GEN}/$PREV_MODEL" .
+if [ ! -f "$PREV_MODEL" ] && [ -f "experiments/quantum_d0_perm9/gen${PREV_GEN}/$PREV_MODEL" ]; then
+    echo "直前世代モデルをアーカイブから復元します: experiments/quantum_d0_perm9/gen${PREV_GEN}/$PREV_MODEL"
+    cp "experiments/quantum_d0_perm9/gen${PREV_GEN}/$PREV_MODEL" .
 fi
 
 echo "=========================================================="
@@ -57,5 +57,5 @@ rm -f input*.yaml tasks.sh
 
 echo "=========================================================="
 echo "★ Gen${GEN} の全パイプラインが完全完了しました！"
-echo "成果物は experiments/quantum_d0/gen${GEN}/ に保存されています。"
+echo "成果物は experiments/quantum_d0_perm9/gen${GEN}/ に保存されています。"
 echo "=========================================================="

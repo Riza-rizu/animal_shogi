@@ -61,12 +61,12 @@ def test_capture_excludes_lion():
     print("ライオン除外OK")
 
 def test_state_vector():
-    print("\n--- テスト4: 状態ベクトル化 (139次元) ---")
+    print("\n--- テスト4: 状態ベクトル化 (187次元: 順列48次元含む) ---")
     board = QuantumBoard()
     board.setup()
     vec = board.to_state_vector(PLAYER_1)
     print(f"状態ベクトルの形状: {vec.shape}")
-    assert vec.shape == (139,), f"139次元であるべき (実際: {vec.shape})"
+    assert vec.shape == (187,), f"187次元であるべき (実際: {vec.shape})"
     print("状態ベクトル次元OK")
 
 def test_plan_a_official_try():
