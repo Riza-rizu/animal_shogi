@@ -136,6 +136,15 @@ class ModelPlayer(BasePlayer):
         except Exception:
             pass
 
+        # 入力層の次元数（139 または 187）を自動取得
+        self.input_dim = 187
+        try:
+            inp_shape = getattr(self.model, 'input_shape', None)
+            if inp_shape and isinstance(inp_shape, tuple):
+                self.input_dim = inp_shape[-1]
+        except Exception:
+            pass
+
         if self.is_tanh:
             self.win_val = 1.0
             self.loss_val = -1.0
@@ -207,7 +216,7 @@ class ModelPlayer(BasePlayer):
         if next_boards:
             if self.depth == 0:
                 # 深さ0: 相手視点の次盤面をバッチ推論
-                vectors = [state2vec(nb, opponent_id) for _, nb in next_boards]
+                vectors = [state2vec(nb, opponent_id)[:self.input_dim] for _, nb in next_boards]
                 batch_x = np.array(vectors, dtype=np.float32)
                 # predict() はオーバーヘッドが極めて大きいため直接モデルを呼び出す
                 preds = self.model(batch_x, training=False).numpy().flatten()
@@ -244,7 +253,7 @@ class ModelPlayer(BasePlayer):
 
                     # 相手の合法手のうち、自分にとって最悪の手（相手にとって最善）
                     if opp_next_boards:
-                        opp_vecs = [state2vec(onb, self.player_id) for onb in opp_next_boards]
+                        opp_vecs = [state2vec(onb, self.player_id)[:self.input_dim] for onb in opp_next_boards]
                         batch_opp = np.array(opp_vecs, dtype=np.float32)
                         opp_preds = self.model(batch_opp, training=False).numpy().flatten()
                         # opp_preds は自分手番目線

@@ -68,17 +68,33 @@ def main():
             pickle.dump(cumulative_data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     # train_data.npy の作成 (187次元 + 評価値1次元 = 188次元)
-    print("train_data.npy を構築中...")
-    num_samples = len(cumulative_data)
+    MAX_SAMPLES = 3_000_000
+    total_positions = len(cumulative_data)
+
+    if total_positions > MAX_SAMPLES:
+        print(f"【メモリ安全弁作動】総局面数 {total_positions:,} が上限 ({MAX_SAMPLES:,}) を超えたため、{MAX_SAMPLES:,}局面を均等サンプリングして train_data.npy を構築します...")
+        selected_indices = set(np.random.choice(total_positions, size=MAX_SAMPLES, replace=False))
+        num_samples = MAX_SAMPLES
+    else:
+        selected_indices = None
+        num_samples = total_positions
+
+    print(f"train_data.npy を構築中 (サンプル数: {num_samples:,})...")
     dataset = np.zeros((num_samples, 188), dtype=np.float32)
 
+    idx = 0
     for i, (b_key, (visits, val_sum)) in enumerate(cumulative_data.items()):
+        if selected_indices is not None and i not in selected_indices:
+            continue
         # bytes から 187次元 float32 ベクトルを復元
         s_vec = np.frombuffer(b_key, dtype=np.float32)
         # 評価値 (平均値) を -1.0 〜 1.0 にクリップ
         avg_eval = float(np.clip(val_sum / visits if visits > 0 else 0.0, -1.0, 1.0))
-        dataset[i, :187] = s_vec
-        dataset[i, 187] = avg_eval
+        dataset[idx, :187] = s_vec
+        dataset[idx, 187] = avg_eval
+        idx += 1
+        if idx >= num_samples:
+            break
 
     np.save("train_data.npy", dataset)
     print(f"train_data.npy を保存しました (形状: {dataset.shape})")
@@ -86,6 +102,8 @@ def main():
     # 大規模配列のメモリを即時完全解放
     del dataset
     del cumulative_data
+    if 'selected_indices' in locals():
+        del selected_indices
     if 'current_gen_data' in locals():
         del current_gen_data
     import gc
