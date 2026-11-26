@@ -62,39 +62,29 @@ def main():
                 current_gen_data[k][0] += visits
                 current_gen_data[k][1] += val_sum
 
+        # 【プルーニング実行】訪問回数が 0.7 未満になった古い局面をパージ
+        PRUNE_THRESHOLD = 0.70
+        before_cnt = len(cumulative_data)
+        cumulative_data = {k: v for k, v in cumulative_data.items() if v[0] >= PRUNE_THRESHOLD}
+        print(f"【プルーニング実行】{before_cnt:,} 局面 -> {len(cumulative_data):,} 局面に適正化しました (visits < {PRUNE_THRESHOLD} を破棄)")
+
         # 累計ファイルの保存
-        print(f"累計データベースを保存しています: {CUMULATIVE_FILE} (ユニーク局面数: {len(cumulative_data)})")
+        print(f"累計データベースを保存しています: {CUMULATIVE_FILE} (ユニーク局面数: {len(cumulative_data):,})")
         with open(CUMULATIVE_FILE, 'wb') as f:
             pickle.dump(cumulative_data, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-    # train_data.npy の作成 (187次元 + 評価値1次元 = 188次元)
-    MAX_SAMPLES = 3_000_000
-    total_positions = len(cumulative_data)
-
-    if total_positions > MAX_SAMPLES:
-        print(f"【メモリ安全弁作動】総局面数 {total_positions:,} が上限 ({MAX_SAMPLES:,}) を超えたため、{MAX_SAMPLES:,}局面を均等サンプリングして train_data.npy を構築します...")
-        selected_indices = set(np.random.choice(total_positions, size=MAX_SAMPLES, replace=False))
-        num_samples = MAX_SAMPLES
-    else:
-        selected_indices = None
-        num_samples = total_positions
-
-    print(f"train_data.npy を構築中 (サンプル数: {num_samples:,})...")
+    # train_data.npy の作成 (187次元 + 評価値1次元 = 188次元: 全件学習)
+    num_samples = len(cumulative_data)
+    print(f"train_data.npy を構築中 (全件学習・サンプル数: {num_samples:,})...")
     dataset = np.zeros((num_samples, 188), dtype=np.float32)
 
-    idx = 0
-    for i, (b_key, (visits, val_sum)) in enumerate(cumulative_data.items()):
-        if selected_indices is not None and i not in selected_indices:
-            continue
+    for idx, (b_key, (visits, val_sum)) in enumerate(cumulative_data.items()):
         # bytes から 187次元 float32 ベクトルを復元
         s_vec = np.frombuffer(b_key, dtype=np.float32)
         # 評価値 (平均値) を -1.0 〜 1.0 にクリップ
         avg_eval = float(np.clip(val_sum / visits if visits > 0 else 0.0, -1.0, 1.0))
         dataset[idx, :187] = s_vec
         dataset[idx, 187] = avg_eval
-        idx += 1
-        if idx >= num_samples:
-            break
 
     np.save("train_data.npy", dataset)
     print(f"train_data.npy を保存しました (形状: {dataset.shape})")
@@ -102,8 +92,6 @@ def main():
     # 大規模配列のメモリを即時完全解放
     del dataset
     del cumulative_data
-    if 'selected_indices' in locals():
-        del selected_indices
     if 'current_gen_data' in locals():
         del current_gen_data
     import gc

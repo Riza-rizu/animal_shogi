@@ -83,7 +83,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=10, help="エポック数")
     parser.add_argument("--batch_size", type=int, default=256, help="バッチサイズ")
     parser.add_argument("--n_val", type=int, default=10000, help="学習監視用サンプル数 (デフォルト: 10000)")
-    parser.add_argument("--max_samples", type=int, default=3000000, help="学習局面数の上限安全弁 (デフォルト: 300万)")
+    parser.add_argument("--max_samples", type=int, default=0, help="学習局面数の上限安全弁 (0で上限なし・全件学習)")
     args = parser.parse_args()
 
     if args.init:
